@@ -19,6 +19,7 @@ backend-lint-fix: ## Fix auto-fixable backend lint issues
 
 docker-build: ## Build the backend Docker image
 	docker build -t film-set-backend ./backend
+	docker build -t film-set-ui ./ui
 
 compose-up: ## Start services with Docker Compose
 	docker compose up --build -d

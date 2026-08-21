@@ -1,15 +1,16 @@
 import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
 from api.router import api_router
-from modules.offset_agent.router import router as offset_agent_router
 from core.config import settings
 from core.exception_handlers import (
     http_exception_handler,
     validation_exception_handler,
 )
+from modules.offset_agent.router import router as offset_agent_router
 from shared.middlewares.app_middleware import AppMiddleware
 from shared.utils.logging import configure_logging
 

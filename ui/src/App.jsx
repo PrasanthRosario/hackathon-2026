@@ -2,24 +2,34 @@ import React, { useState } from 'react';
 import Header from './components/Header';
 import LeftPanel from './components/LeftPanel';
 import RenderView from './components/RenderView';
+import {
+  checkCoverage,
+  checkPhysics,
+  downloadUsdFromPrompt,
+  generateUsd,
+  proposeFix,
+  sendChatTurn
+} from './api/offsetAgent';
 
 export default function App() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
       content: 'Welcome to Offset! I am your pre-visualization set validation assistant for NVIDIA Omniverse. Describe your film set (e.g., "2 walls forming a corner, 4m wide, with a floor and 3m ceiling"), and I will help you refine and validate it.',
-      model_used: '~anthropic/claude-haiku-latest'
+      model_used: 'offset-agent'
     }
   ]);
 
   // Default scene state starts clean (no pre-extracted confirmation card)
   const [sceneConfig, setSceneConfig] = useState(null);
-  const [currentModel, setCurrentModel] = useState('~anthropic/claude-haiku-latest');
+  const [currentScene, setCurrentScene] = useState(null);
+  const [currentModel, setCurrentModel] = useState('offset-agent');
   const [isLoading, setIsLoading] = useState(false);
   const [readyForConfirmation, setReadyForConfirmation] = useState(false);
   const [readableSummary, setReadableSummary] = useState(null);
   const [usdStatus, setUsdStatus] = useState(null);
   const [isGeneratingUSD, setIsGeneratingUSD] = useState(false);
+  const [isDownloadingPromptUSD, setIsDownloadingPromptUSD] = useState(false);
   const [checkResults, setCheckResults] = useState(null);
   const [kitRenderStatus, setKitRenderStatus] = useState('idle'); // idle | rendering | done | failed
   const [kitRenderResult, setKitRenderResult] = useState(null);
@@ -28,6 +38,27 @@ export default function App() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isApplyingFix, setIsApplyingFix] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [chatMode, setChatMode] = useState('preview');
+
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const filenameFromPrompt = (prompt) => {
+    const slug = prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 48);
+    return `${slug || 'agent_generated'}.usda`;
+  };
 
   // Send conversational turn to FastAPI backend (/api/chat)
   const handleSendMessage = async (text) => {
@@ -37,20 +68,50 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          current_config: sceneConfig
-        })
-      });
+      if (chatMode === 'usd-file') {
+        const outputFilename = filenameFromPrompt(text);
+        setIsDownloadingPromptUSD(true);
+        const download = await downloadUsdFromPrompt({
+          prompt: text,
+          messages,
+          outputFilename
+        });
+        downloadBlob(download.blob, outputFilename);
 
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}`);
+        const previewData = await sendChatTurn({
+          messages: updatedMessages,
+          currentConfig: sceneConfig,
+          currentScene
+        });
+
+        setCurrentModel(download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback');
+        setReadyForConfirmation(previewData.ready_for_confirmation);
+        if (previewData.scene_config) {
+          setSceneConfig(previewData.scene_config);
+        }
+        if (previewData.scene) {
+          setCurrentScene(previewData.scene);
+        }
+        if (previewData.readable_summary) {
+          setReadableSummary(previewData.readable_summary);
+        }
+
+        setMessages([
+          ...updatedMessages,
+          {
+            role: 'assistant',
+            content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes). I also updated the Three.js preview from the same prompt.`,
+            model_used: download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback'
+          }
+        ]);
+        return;
       }
 
-      const data = await response.json();
+      const data = await sendChatTurn({
+        messages: updatedMessages,
+        currentConfig: sceneConfig,
+        currentScene
+      });
 
       setMessages([
         ...updatedMessages,
@@ -67,6 +128,9 @@ export default function App() {
       if (data.scene_config) {
         setSceneConfig(data.scene_config);
       }
+      if (data.scene) {
+        setCurrentScene(data.scene);
+      }
       if (data.readable_summary) {
         setReadableSummary(data.readable_summary);
       }
@@ -76,31 +140,27 @@ export default function App() {
         ...updatedMessages,
         {
           role: 'assistant',
-          content: 'Sorry, I encountered an issue connecting to the LangChain backend. Please check backend server status.',
+          content: `Sorry, I could not complete that chat request. ${err.message}`,
           model_used: 'error'
         }
       ]);
     } finally {
+      setIsDownloadingPromptUSD(false);
       setIsLoading(false);
     }
   };
 
   // POST /api/generate-usd
   const handleConfirmGenerateUSD = async () => {
-    if (!sceneConfig) return;
+    if (!sceneConfig && !currentScene) return;
     setIsGeneratingUSD(true);
 
     try {
-      const response = await fetch('/api/generate-usd', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scene_config: sceneConfig,
-          output_filename: 'generated_set.usda'
-        })
+      const data = await generateUsd({
+        sceneConfig: sceneConfig || { walls: [], floor: { width: 8, depth: 6 }, shots: [] },
+        currentScene,
+        outputFilename: 'generated_set.usda'
       });
-
-      const data = await response.json();
       setUsdStatus(data);
 
       setMessages(prev => [
@@ -116,6 +176,41 @@ export default function App() {
       alert('Failed to generate USD file.');
     } finally {
       setIsGeneratingUSD(false);
+    }
+  };
+
+  const handleDownloadPromptUSD = async (prompt) => {
+    if (!prompt.trim() || isDownloadingPromptUSD) return;
+    setIsDownloadingPromptUSD(true);
+
+    try {
+      const outputFilename = filenameFromPrompt(prompt);
+      const download = await downloadUsdFromPrompt({
+        prompt,
+        messages,
+        outputFilename
+      });
+      downloadBlob(download.blob, outputFilename);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes).`,
+          model_used: download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback'
+        }
+      ]);
+    } catch (err) {
+      console.error('Download USD error:', err);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Sorry, I could not generate the USD download. ${err.message}`,
+          model_used: 'error'
+        }
+      ]);
+    } finally {
+      setIsDownloadingPromptUSD(false);
     }
   };
 
@@ -336,6 +431,7 @@ export default function App() {
         ]
       };
       setSceneConfig(presetConfig);
+      setCurrentScene(null);
       setReadyForConfirmation(true);
       setMessages(prev => [
         ...prev,
@@ -359,6 +455,7 @@ export default function App() {
         ]
       };
       setSceneConfig(presetConfig);
+      setCurrentScene(null);
       setReadyForConfirmation(true);
       setMessages(prev => [
         ...prev,
@@ -375,12 +472,7 @@ export default function App() {
   const handleCheckCoverage = async () => {
     if (!sceneConfig) return;
     try {
-      const res = await fetch('/api/check-coverage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sceneConfig)
-      });
-      const data = await res.json();
+      const data = await checkCoverage(sceneConfig);
       setCheckResults(data);
     } catch (e) {
       console.error(e);
@@ -390,12 +482,7 @@ export default function App() {
   const handleCheckPhysics = async () => {
     if (!sceneConfig) return;
     try {
-      const res = await fetch('/api/check-physics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sceneConfig)
-      });
-      const data = await res.json();
+      const data = await checkPhysics(sceneConfig);
       setCheckResults(data);
     } catch (e) {
       console.error(e);
@@ -414,13 +501,17 @@ export default function App() {
         <LeftPanel
           messages={messages}
           onSendMessage={handleSendMessage}
+          chatMode={chatMode}
+          onChatModeChange={setChatMode}
           isLoading={isLoading}
           sceneConfig={sceneConfig}
           readableSummary={readableSummary}
           readyForConfirmation={readyForConfirmation}
           onConfirmGenerateUSD={handleConfirmGenerateUSD}
           isGeneratingUSD={isGeneratingUSD}
+          isDownloadingPromptUSD={isDownloadingPromptUSD}
           usdStatus={usdStatus}
+          onDownloadPromptUSD={handleDownloadPromptUSD}
           onCheckCoverage={handleCheckCoverage}
           onCheckPhysics={handleCheckPhysics}
           checkResults={checkResults}
@@ -428,6 +519,7 @@ export default function App() {
 
         <RenderView
           sceneConfig={sceneConfig}
+          sceneSpec={currentScene}
           usdStatus={usdStatus}
           onRenderInKit={handleRenderInKit}
           kitRenderStatus={kitRenderStatus}
