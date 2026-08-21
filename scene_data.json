@@ -1,0 +1,361 @@
+{
+  "boxes": [
+    {
+      "path": "/World/Room/Floor",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.0,
+        -3.0,
+        -0.1
+      ],
+      "max": [
+        4.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "path": "/World/Room/WallNorth",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.0,
+        2.9,
+        -0.0
+      ],
+      "max": [
+        4.0,
+        3.1,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Room/WallSouth",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.0,
+        -3.1,
+        -0.0
+      ],
+      "max": [
+        4.0,
+        -2.9,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Room/WallEast",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        3.9,
+        -3.0,
+        -0.0
+      ],
+      "max": [
+        4.1,
+        3.0,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Room/WallWest",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.1,
+        -3.0,
+        -0.0
+      ],
+      "max": [
+        -3.9,
+        3.0,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Props/TableA",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        -2.0,
+        0.0,
+        -0.1
+      ],
+      "max": [
+        -1.0,
+        1.0,
+        0.9
+      ]
+    },
+    {
+      "path": "/World/Props/CrateA",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        1.7,
+        -1.3,
+        -0.0
+      ],
+      "max": [
+        2.3,
+        -0.7,
+        0.6
+      ]
+    },
+    {
+      "path": "/World/Props/CrateB",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        2.3,
+        -1.3,
+        -0.0
+      ],
+      "max": [
+        2.9,
+        -0.7,
+        0.6
+      ]
+    },
+    {
+      "path": "/World/Props/Shelf",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        -4.0,
+        -2.5,
+        0.4
+      ],
+      "max": [
+        -3.0,
+        -1.5,
+        1.4
+      ]
+    },
+    {
+      "path": "/World/ActorMarkA",
+      "type": "Cube",
+      "group": "ActorMarkA",
+      "min": [
+        -0.075,
+        -0.075,
+        0.825
+      ],
+      "max": [
+        0.075,
+        0.075,
+        0.975
+      ]
+    },
+    {
+      "path": "/World/Rig/LightStandA",
+      "type": "Cylinder",
+      "group": "Rig",
+      "min": [
+        0.45,
+        1.55,
+        0.0
+      ],
+      "max": [
+        0.55,
+        1.65,
+        2.6
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "path": "/World/Cameras/CamMedium",
+      "shot_name": "Shot 1 \u2014 CamMedium on actor",
+      "pos": [
+        -3.0,
+        0.5,
+        1.6
+      ],
+      "frustum_corners": [
+        [
+          -2.8959,
+          0.507,
+          1.5951
+        ],
+        [
+          -2.9038,
+          0.4596,
+          1.5951
+        ],
+        [
+          -2.9118,
+          0.461,
+          1.56
+        ],
+        [
+          -2.9039,
+          0.5083,
+          1.56
+        ],
+        [
+          3.2432,
+          0.9193,
+          1.3067
+        ],
+        [
+          2.7698,
+          -1.9215,
+          1.3067
+        ],
+        [
+          2.2919,
+          -1.8418,
+          -0.7982
+        ],
+        [
+          2.7654,
+          0.999,
+          -0.7982
+        ]
+      ],
+      "ok": true
+    },
+    {
+      "path": "/World/Cameras/CamWide",
+      "shot_name": "Shot 2 \u2014 CamWide establishing",
+      "pos": [
+        -3.6,
+        -2.4,
+        1.6
+      ],
+      "frustum_corners": [
+        [
+          -3.5438,
+          -2.299,
+          1.6233
+        ],
+        [
+          -3.486,
+          -2.3806,
+          1.6233
+        ],
+        [
+          -3.4945,
+          -2.3866,
+          1.5491
+        ],
+        [
+          -3.5522,
+          -2.305,
+          1.5491
+        ],
+        [
+          -0.2272,
+          3.6602,
+          3.0001
+        ],
+        [
+          3.2376,
+          -1.2383,
+          3.0001
+        ],
+        [
+          2.7304,
+          -1.597,
+          -1.4568
+        ],
+        [
+          -0.7344,
+          3.3015,
+          -1.4568
+        ]
+      ],
+      "ok": false
+    },
+    {
+      "path": "/World/Cameras/CamCloseup",
+      "shot_name": "Shot 3 \u2014 CamCloseup",
+      "pos": [
+        -3.85,
+        0.1,
+        1.5
+      ],
+      "frustum_corners": [
+        [
+          -3.7495,
+          0.1141,
+          1.4976
+        ],
+        [
+          -3.7495,
+          0.0859,
+          1.4976
+        ],
+        [
+          -3.7522,
+          0.0859,
+          1.4766
+        ],
+        [
+          -3.7522,
+          0.1141,
+          1.4766
+        ],
+        [
+          2.1819,
+          0.9471,
+          1.3573
+        ],
+        [
+          2.1819,
+          -0.7471,
+          1.3573
+        ],
+        [
+          2.0182,
+          -0.7471,
+          0.0973
+        ],
+        [
+          2.0182,
+          0.9471,
+          0.0973
+        ]
+      ],
+      "ok": false
+    }
+  ],
+  "shots": [
+    {
+      "name": "Shot 1 \u2014 CamMedium on actor",
+      "camera": "/World/Cameras/CamMedium",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "name": "Shot 2 \u2014 CamWide establishing",
+      "camera": "/World/Cameras/CamWide",
+      "ok": false,
+      "issues": [
+        {
+          "rule": "frame_intrusion",
+          "detail": "/World/Rig/LightStandA is visible in frame from /World/Cameras/CamWide"
+        },
+        {
+          "rule": "clearance",
+          "detail": "/World/Props/CrateA and /World/Props/CrateB are too close (0.0m, need 0.5m)"
+        }
+      ]
+    },
+    {
+      "name": "Shot 3 \u2014 CamCloseup",
+      "camera": "/World/Cameras/CamCloseup",
+      "ok": false,
+      "issues": [
+        {
+          "rule": "clearance",
+          "detail": "/World/Cameras/CamCloseup and /World/Room/WallWest are too close (0.05m, need 0.3m)"
+        }
+      ]
+    }
+  ]
+}

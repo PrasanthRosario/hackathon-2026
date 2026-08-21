@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pre-viz Shot Validator — Scene Viewer</title>
+<style>
+  :root{
+    --bg:#0d1016; --panel:#151a23; --line:#232a36; --text:#e7ebf2;
+    --dim:#7c8798; --pass:#4fd08a; --fail:#f2657a; --accent:#f0a93b;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:var(--mono);overflow:hidden}
+  #app{display:grid;grid-template-columns:1fr 340px;height:100vh}
+  #canvas-wrap{position:relative}
+  canvas{display:block}
+  #hint{position:absolute;bottom:14px;left:14px;font-size:11px;color:var(--dim);
+    background:rgba(13,16,22,.7);padding:6px 10px;border-radius:4px;
+    border:1px solid var(--line)}
+  #sidebar{background:var(--panel);border-left:1px solid var(--line);
+    padding:18px 16px;overflow-y:auto}
+  #sidebar h1{font-size:13px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--dim);margin:0 0 4px;font-weight:500}
+  #sidebar .sub{font-size:11px;color:var(--dim);margin:0 0 18px}
+  .shot{border:1px solid var(--line);border-radius:6px;padding:11px 12px;
+    margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+  .shot:hover{border-color:#3a4354}
+  .shot.active{border-color:var(--accent)}
+  .shot-head{display:flex;justify-content:space-between;align-items:baseline;
+    gap:8px;margin-bottom:6px}
+  .shot-name{font-size:12.5px;font-weight:500}
+  .badge{font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+    padding:2px 7px;border-radius:3px;white-space:nowrap}
+  .badge.pass{color:var(--pass);background:rgba(79,208,138,.12)}
+  .badge.fail{color:var(--fail);background:rgba(242,101,122,.12)}
+  .issue{font-size:11px;color:var(--dim);line-height:1.55;padding-left:10px;
+    border-left:2px solid var(--fail);margin-top:5px}
+  .issue b{color:var(--fail);font-weight:500}
+  .legend{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+  .legend-item{display:flex;align-items:center;gap:8px;font-size:11px;
+    color:var(--dim);margin-bottom:7px}
+  .swatch{width:10px;height:10px;border-radius:2px;flex:none}
+  #tooltip{position:absolute;pointer-events:none;background:#0d1016;
+    border:1px solid var(--line);border-radius:4px;padding:5px 9px;
+    font-size:11px;color:var(--text);display:none;z-index:5}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas-wrap">
+    <div id="hint">drag to orbit · scroll to zoom · click a shot to isolate its camera</div>
+    <div id="tooltip"></div>
+  </div>
+  <div id="sidebar">
+    <h1>Shot validation</h1>
+    <p class="sub">Pre-viz check against the 3D set — before anything gets built.</p>
+    <div id="shot-list"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="swatch" style="background:#4fd08a"></div>pass — frustum</div>
+      <div class="legend-item"><div class="swatch" style="background:#f2657a"></div>fail — frustum</div>
+      <div class="legend-item"><div class="swatch" style="background:#c7cdd8"></div>set geometry</div>
+      <div class="legend-item"><div class="swatch" style="background:#e8443f"></div>flagged prop</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const SCENE_DATA = {
+  "boxes": [
+    {
+      "path": "/World/Room/Floor",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.0,
+        -3.0,
+        -0.1
+      ],
+      "max": [
+        4.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "path": "/World/Room/WallNorth",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.0,
+        2.9,
+        -0.0
+      ],
+      "max": [
+        4.0,
+        3.1,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Room/WallSouth",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.0,
+        -3.1,
+        -0.0
+      ],
+      "max": [
+        4.0,
+        -2.9,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Room/WallEast",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        3.9,
+        -3.0,
+        -0.0
+      ],
+      "max": [
+        4.1,
+        3.0,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Room/WallWest",
+      "type": "Cube",
+      "group": "Room",
+      "min": [
+        -4.1,
+        -3.0,
+        -0.0
+      ],
+      "max": [
+        -3.9,
+        3.0,
+        3.2
+      ]
+    },
+    {
+      "path": "/World/Props/TableA",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        -2.0,
+        0.0,
+        -0.1
+      ],
+      "max": [
+        -1.0,
+        1.0,
+        0.9
+      ]
+    },
+    {
+      "path": "/World/Props/CrateA",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        1.7,
+        -1.3,
+        -0.0
+      ],
+      "max": [
+        2.3,
+        -0.7,
+        0.6
+      ]
+    },
+    {
+      "path": "/World/Props/CrateB",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        2.3,
+        -1.3,
+        -0.0
+      ],
+      "max": [
+        2.9,
+        -0.7,
+        0.6
+      ]
+    },
+    {
+      "path": "/World/Props/Shelf",
+      "type": "Cube",
+      "group": "Props",
+      "min": [
+        -4.0,
+        -2.5,
+        0.4
+      ],
+      "max": [
+        -3.0,
+        -1.5,
+        1.4
+      ]
+    },
+    {
+      "path": "/World/ActorMarkA",
+      "type": "Cube",
+      "group": "ActorMarkA",
+      "min": [
+        -0.075,
+        -0.075,
+        0.825
+      ],
+      "max": [
+        0.075,
+        0.075,
+        0.975
+      ]
+    },
+    {
+      "path": "/World/Rig/LightStandA",
+      "type": "Cylinder",
+      "group": "Rig",
+      "min": [
+        0.45,
+        1.55,
+        0.0
+      ],
+      "max": [
+        0.55,
+        1.65,
+        2.6
+      ]
+    }
+  ],
+  "cameras": [
+    {
+      "path": "/World/Cameras/CamMedium",
+      "shot_name": "Shot 1 \u2014 CamMedium on actor",
+      "pos": [
+        -3.0,
+        0.5,
+        1.6
+      ],
+      "frustum_corners": [
+        [
+          -2.8959,
+          0.507,
+          1.5951
+        ],
+        [
+          -2.9038,
+          0.4596,
+          1.5951
+        ],
+        [
+          -2.9118,
+          0.461,
+          1.56
+        ],
+        [
+          -2.9039,
+          0.5083,
+          1.56
+        ],
+        [
+          3.2432,
+          0.9193,
+          1.3067
+        ],
+        [
+          2.7698,
+          -1.9215,
+          1.3067
+        ],
+        [
+          2.2919,
+          -1.8418,
+          -0.7982
+        ],
+        [
+          2.7654,
+          0.999,
+          -0.7982
+        ]
+      ],
+      "ok": true
+    },
+    {
+      "path": "/World/Cameras/CamWide",
+      "shot_name": "Shot 2 \u2014 CamWide establishing",
+      "pos": [
+        -3.6,
+        -2.4,
+        1.6
+      ],
+      "frustum_corners": [
+        [
+          -3.5438,
+          -2.299,
+          1.6233
+        ],
+        [
+          -3.486,
+          -2.3806,
+          1.6233
+        ],
+        [
+          -3.4945,
+          -2.3866,
+          1.5491
+        ],
+        [
+          -3.5522,
+          -2.305,
+          1.5491
+        ],
+        [
+          -0.2272,
+          3.6602,
+          3.0001
+        ],
+        [
+          3.2376,
+          -1.2383,
+          3.0001
+        ],
+        [
+          2.7304,
+          -1.597,
+          -1.4568
+        ],
+        [
+          -0.7344,
+          3.3015,
+          -1.4568
+        ]
+      ],
+      "ok": false
+    },
+    {
+      "path": "/World/Cameras/CamCloseup",
+      "shot_name": "Shot 3 \u2014 CamCloseup",
+      "pos": [
+        -3.85,
+        0.1,
+        1.5
+      ],
+      "frustum_corners": [
+        [
+          -3.7495,
+          0.1141,
+          1.4976
+        ],
+        [
+          -3.7495,
+          0.0859,
+          1.4976
+        ],
+        [
+          -3.7522,
+          0.0859,
+          1.4766
+        ],
+        [
+          -3.7522,
+          0.1141,
+          1.4766
+        ],
+        [
+          2.1819,
+          0.9471,
+          1.3573
+        ],
+        [
+          2.1819,
+          -0.7471,
+          1.3573
+        ],
+        [
+          2.0182,
+          -0.7471,
+          0.0973
+        ],
+        [
+          2.0182,
+          0.9471,
+          0.0973
+        ]
+      ],
+      "ok": false
+    }
+  ],
+  "shots": [
+    {
+      "name": "Shot 1 \u2014 CamMedium on actor",
+      "camera": "/World/Cameras/CamMedium",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "name": "Shot 2 \u2014 CamWide establishing",
+      "camera": "/World/Cameras/CamWide",
+      "ok": false,
+      "issues": [
+        {
+          "rule": "frame_intrusion",
+          "detail": "/World/Rig/LightStandA is visible in frame from /World/Cameras/CamWide"
+        },
+        {
+          "rule": "clearance",
+          "detail": "/World/Props/CrateA and /World/Props/CrateB are too close (0.0m, need 0.5m)"
+        }
+      ]
+    },
+    {
+      "name": "Shot 3 \u2014 CamCloseup",
+      "camera": "/World/Cameras/CamCloseup",
+      "ok": false,
+      "issues": [
+        {
+          "rule": "clearance",
+          "detail": "/World/Cameras/CamCloseup and /World/Room/WallWest are too close (0.05m, need 0.3m)"
+        }
+      ]
+    }
+  ]
+};
+
+// ---------------------------------------------------------------------
+// Three.js setup
+// ---------------------------------------------------------------------
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1016);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 100);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+wrap.appendChild(renderer.domElement);
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+// lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const dir = new THREE.DirectionalLight(0xffffff, 0.55);
+dir.position.set(6, 8, 10);
+scene.add(dir);
+
+// ground grid
+const grid = new THREE.GridHelper(16, 32, 0x2a3242, 0x1a202b);
+grid.rotation.x = Math.PI / 2; // USD is Z-up, three's grid is XZ by default
+scene.add(grid);
+
+// ---------------------------------------------------------------------
+// USD (Z-up, meters) -> three.js (Y-up) coordinate mapping
+// world (x, y, z)_usd -> three (x, z, y)_usd, i.e. swap Y/Z
+// ---------------------------------------------------------------------
+function toThree(v) { return new THREE.Vector3(v[0], v[2], v[1]); }
+
+// ---------------------------------------------------------------------
+// Draw set geometry as boxes
+// ---------------------------------------------------------------------
+const roomMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, transparent: true, opacity: 0.35 });
+const propMat = new THREE.MeshStandardMaterial({ color: 0xc7cdd8 });
+const rigMat = new THREE.MeshStandardMaterial({ color: 0x8b95a8 });
+const markMat = new THREE.MeshStandardMaterial({ color: 0xf0a93b });
+const flaggedMat = new THREE.MeshStandardMaterial({ color: 0xe8443f });
+
+const flaggedPaths = new Set();
+SCENE_DATA.shots.forEach(s => s.issues.forEach(i => {
+  const m = i.detail.match(/\/World\/[A-Za-z0-9_/]+/g);
+  if (m) m.forEach(p => flaggedPaths.add(p));
+}));
+
+const boxMeshes = {};
+SCENE_DATA.boxes.forEach(b => {
+  const size = [b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]];
+  const center = [(b.max[0]+b.min[0])/2, (b.max[1]+b.min[1])/2, (b.max[2]+b.min[2])/2];
+  // three geometry uses (x width, y height, z depth) post-mapping -> swap dims 1/2
+  const geo = new THREE.BoxGeometry(Math.max(size[0],0.02), Math.max(size[2],0.02), Math.max(size[1],0.02));
+  let mat = propMat;
+  if (b.group === 'Room') mat = roomMat;
+  else if (b.group === 'Rig') mat = rigMat;
+  else if (b.path.includes('ActorMark')) mat = markMat;
+  if (flaggedPaths.has(b.path)) mat = flaggedMat;
+
+  const mesh = new THREE.Mesh(geo, mat);
+  const c = toThree(center);
+  mesh.position.copy(c);
+  scene.add(mesh);
+  boxMeshes[b.path] = mesh;
+
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
+  );
+  edges.position.copy(c);
+  scene.add(edges);
+});
+
+// ---------------------------------------------------------------------
+// Draw camera frustums
+// ---------------------------------------------------------------------
+const frustumGroups = {};
+SCENE_DATA.cameras.forEach(cam => {
+  const color = cam.ok ? 0x4fd08a : 0xf2657a;
+  const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+  const pts3 = cam.frustum_corners.map(toThree);
+  const [ntl, ntr, nbr, nbl, ftl, ftr, fbr, fbl] = pts3;
+
+  const edges = [
+    [ntl,ntr],[ntr,nbr],[nbr,nbl],[nbl,ntl],       // near rect
+    [ftl,ftr],[ftr,fbr],[fbr,fbl],[fbl,ftl],       // far rect
+    [ntl,ftl],[ntr,ftr],[nbr,fbr],[nbl,fbl],       // connectors
+  ];
+  const group = new THREE.Group();
+  edges.forEach(([a,b]) => {
+    const g = new THREE.BufferGeometry().setFromPoints([a,b]);
+    group.add(new THREE.Line(g, mat));
+  });
+
+  // small sphere at camera position
+  const camPos = toThree(cam.pos);
+  const sph = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 12, 12),
+    new THREE.MeshStandardMaterial({ color })
+  );
+  sph.position.copy(camPos);
+  group.add(sph);
+
+  scene.add(group);
+  frustumGroups[cam.path] = group;
+});
+
+// ---------------------------------------------------------------------
+// Manual orbit controls (no OrbitControls addon needed)
+// ---------------------------------------------------------------------
+let radius = 12, theta = Math.PI / 4, phi = Math.PI / 3.2;
+let target = new THREE.Vector3(0, 1, 0);
+let dragging = false, lastX = 0, lastY = 0;
+
+function updateCamera() {
+  const x = target.x + radius * Math.sin(phi) * Math.sin(theta);
+  const y = target.y + radius * Math.cos(phi);
+  const z = target.z + radius * Math.sin(phi) * Math.cos(theta);
+  camera.position.set(x, y, z);
+  camera.lookAt(target);
+}
+
+renderer.domElement.addEventListener('mousedown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+window.addEventListener('mouseup', () => dragging = false);
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  theta -= (e.clientX - lastX) * 0.006;
+  phi -= (e.clientY - lastY) * 0.006;
+  phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi));
+  lastX = e.clientX; lastY = e.clientY;
+  updateCamera();
+});
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  radius *= (1 + e.deltaY * 0.001);
+  radius = Math.max(2, Math.min(40, radius));
+  updateCamera();
+}, { passive: false });
+
+// ---------------------------------------------------------------------
+// Hover tooltip — raycast against set geometry, show the prim path
+// ---------------------------------------------------------------------
+const tooltip = document.getElementById('tooltip');
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const pathByMesh = new Map();
+Object.entries(boxMeshes).forEach(([path, mesh]) => pathByMesh.set(mesh, path));
+
+renderer.domElement.addEventListener('mousemove', e => {
+  if (dragging) { tooltip.style.display = 'none'; return; }
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(Object.values(boxMeshes));
+  if (hits.length) {
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX - rect.left + 14) + 'px';
+    tooltip.style.top = (e.clientY - rect.top + 14) + 'px';
+    tooltip.textContent = pathByMesh.get(hits[0].object);
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+renderer.domElement.addEventListener('mouseleave', () => tooltip.style.display = 'none');
+
+resize();
+updateCamera();
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+// ---------------------------------------------------------------------
+// Sidebar: shot list + isolate-on-click
+// ---------------------------------------------------------------------
+const listEl = document.getElementById('shot-list');
+let activeShot = null;
+
+function renderList() {
+  listEl.innerHTML = '';
+  SCENE_DATA.shots.forEach((shot, idx) => {
+    const div = document.createElement('div');
+    div.className = 'shot' + (activeShot === idx ? ' active' : '');
+    const issuesHtml = shot.issues.map(i =>
+      `<div class="issue"><b>${i.rule}</b> — ${i.detail}</div>`
+    ).join('');
+    div.innerHTML = `
+      <div class="shot-head">
+        <span class="shot-name">${shot.name}</span>
+        <span class="badge ${shot.ok ? 'pass' : 'fail'}">${shot.ok ? 'Pass' : 'Fail'}</span>
+      </div>
+      ${issuesHtml}
+    `;
+    div.addEventListener('click', () => {
+      activeShot = (activeShot === idx) ? null : idx;
+      renderList();
+      focusShot(shot.camera);
+    });
+    listEl.appendChild(div);
+  });
+}
+
+function focusShot(camPath) {
+  // isolate: show only the selected shot's frustum, dim the rest away
+  Object.entries(frustumGroups).forEach(([path, group]) => {
+    group.visible = activeShot === null || path === camPath;
+  });
+}
+
+renderList();
+</script>
+</body>
+</html>
