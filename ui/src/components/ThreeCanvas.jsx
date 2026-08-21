@@ -3,7 +3,321 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Play, Pause, Eye, Camera, EyeOff } from 'lucide-react';
 
-export default function ThreeCanvas({ sceneConfig }) {
+const MATERIAL_COLORS = {
+  acoustic_panel: 0x293241,
+  bed: 0x6b7280,
+  chair: 0x394a5f,
+  church: 0x7d7874,
+  crowd: 0x9ca3af,
+  hero: 0xffffff,
+  microphone: 0x181c20,
+  person: 0x9ca3af,
+  plant: 0x2f855a,
+  shelf: 0x6b4f3a,
+  table: 0x6f4528,
+  tree: 0x2f6f3e
+};
+
+function zUpToThreePosition(position = [0, 0, 0]) {
+  const [x, y, z] = position;
+  return new THREE.Vector3(x, z, -y);
+}
+
+function zUpRotationToThree(rotation = [0, 0, 0]) {
+  const [rx, ry, rz] = rotation;
+  return new THREE.Euler(
+    THREE.MathUtils.degToRad(rx),
+    -THREE.MathUtils.degToRad(rz),
+    THREE.MathUtils.degToRad(ry)
+  );
+}
+
+function parseColor(color, fallback) {
+  if (!color) return fallback;
+  return new THREE.Color(color);
+}
+
+function semanticText(object) {
+  return `${object.id} ${object.name} ${object.kind} ${(object.tags || []).join(' ')}`.toLowerCase();
+}
+
+function isPersonObject(object) {
+  const text = semanticText(object);
+  return ['person', 'hero', 'crowd', 'actor', 'extra', 'villager', 'pedestrian'].some(token => text.includes(token));
+}
+
+function isTreeObject(object) {
+  const text = semanticText(object);
+  return ['tree', 'oak', 'palm', 'foliage'].some(token => text.includes(token));
+}
+
+function isChurchObject(object) {
+  const text = semanticText(object);
+  return ['church', 'chapel', 'cathedral'].some(token => text.includes(token));
+}
+
+function createPersonGroup(object) {
+  const text = semanticText(object);
+  const isHero = text.includes('hero');
+  const baseColor = isHero ? 0xffffff : (MATERIAL_COLORS[object.kind] || 0x4f8bc9);
+  const clothing = parseColor(object.material?.color, baseColor);
+  const skin = new THREE.Color(0xd7a47c);
+  const dark = new THREE.Color(0x1f2933);
+  const group = new THREE.Group();
+  group.name = object.id;
+
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.16, 0.78, 6, 12),
+    new THREE.MeshStandardMaterial({ color: clothing, roughness: 0.72 })
+  );
+  body.position.y = 0.82;
+  group.add(body);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.17, 20, 14),
+    new THREE.MeshStandardMaterial({ color: skin, roughness: 0.65 })
+  );
+  head.position.y = 1.45;
+  group.add(head);
+
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.175, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.45),
+    new THREE.MeshStandardMaterial({ color: dark, roughness: 0.8 })
+  );
+  hair.position.y = 1.55;
+  group.add(hair);
+
+  const limbMat = new THREE.MeshStandardMaterial({ color: isHero ? 0xf7f7f2 : dark, roughness: 0.75 });
+  [
+    [-0.09, 0.22],
+    [0.09, 0.22],
+    [-0.22, 0.84],
+    [0.22, 0.84]
+  ].forEach(([x, y], index) => {
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.38, 4, 8), limbMat);
+    limb.position.set(x, y, 0);
+    limb.rotation.z = index < 2 ? 0.08 * Math.sign(x) : 0.35 * Math.sign(x);
+    group.add(limb);
+  });
+
+  if (isHero) {
+    const marker = new THREE.Mesh(
+      new THREE.TorusGeometry(0.34, 0.012, 8, 40),
+      new THREE.MeshStandardMaterial({ color: 0xf1a80a, emissive: 0x6b4a00, roughness: 0.4 })
+    );
+    marker.rotation.x = Math.PI / 2;
+    marker.position.y = 0.03;
+    group.add(marker);
+  }
+
+  group.position.copy(zUpToThreePosition(object.transform?.position));
+  group.rotation.copy(zUpRotationToThree(object.transform?.rotation));
+  group.scale.set(...(object.transform?.scale || [1, 1, 1]));
+  group.traverse(child => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+  return group;
+}
+
+function createTreeGroup(object) {
+  const group = new THREE.Group();
+  group.name = object.id;
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.09, 0.13, 1.15, 10),
+    new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.9 })
+  );
+  trunk.position.y = 0.58;
+  group.add(trunk);
+
+  const foliageMaterial = new THREE.MeshStandardMaterial({
+    color: parseColor(object.material?.color, 0x2f7d42),
+    roughness: 0.9
+  });
+  [
+    [0, 1.35, 0, 0.48],
+    [-0.22, 1.1, 0.08, 0.34],
+    [0.22, 1.14, -0.06, 0.34]
+  ].forEach(([x, y, z, radius]) => {
+    const foliage = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 14), foliageMaterial);
+    foliage.position.set(x, y, z);
+    group.add(foliage);
+  });
+
+  group.position.copy(zUpToThreePosition(object.transform?.position));
+  group.rotation.copy(zUpRotationToThree(object.transform?.rotation));
+  group.scale.set(...(object.transform?.scale || [1, 1, 1]));
+  group.traverse(child => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+  return group;
+}
+
+function createChurchGroup(object) {
+  const [sx = 5, sy = 7, sz = 4] = object.geometry?.size || [];
+  const group = new THREE.Group();
+  group.name = object.id;
+  const stone = new THREE.MeshStandardMaterial({
+    color: parseColor(object.material?.color, 0x8c8782),
+    roughness: 0.86
+  });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x3a312e, roughness: 0.78 });
+
+  const nave = new THREE.Mesh(new THREE.BoxGeometry(sx, Math.max(2.5, sz * 0.62), sy), stone);
+  nave.position.y = Math.max(2.5, sz * 0.62) / 2;
+  group.add(nave);
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(sx * 0.68, 1.2, 4), roofMat);
+  roof.position.y = Math.max(2.5, sz * 0.62) + 0.55;
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.z = sy / sx;
+  group.add(roof);
+
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(sx * 0.32, sz * 0.95, sx * 0.32), stone);
+  tower.position.set(0, sz * 0.48, -sy * 0.38);
+  group.add(tower);
+
+  const steeple = new THREE.Mesh(new THREE.ConeGeometry(sx * 0.22, sz * 0.7, 4), roofMat);
+  steeple.position.set(0, sz * 1.08, -sy * 0.38);
+  steeple.rotation.y = Math.PI / 4;
+  group.add(steeple);
+
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(sx * 0.22, 1.35, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0x2d1b16, roughness: 0.7 })
+  );
+  door.position.set(0, 0.68, -sy / 2 - 0.035);
+  group.add(door);
+
+  group.position.copy(zUpToThreePosition(object.transform?.position));
+  group.rotation.copy(zUpRotationToThree(object.transform?.rotation));
+  group.scale.set(...(object.transform?.scale || [1, 1, 1]));
+  group.traverse(child => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+  return group;
+}
+
+function createSemanticObject(object) {
+  if (isPersonObject(object)) return createPersonGroup(object);
+  if (isTreeObject(object)) return createTreeGroup(object);
+  if (isChurchObject(object)) return createChurchGroup(object);
+  return null;
+}
+
+function createSceneObjectMesh(object) {
+  const semanticObject = createSemanticObject(object);
+  if (semanticObject) return semanticObject;
+
+  const geometry = object.geometry || {};
+  const [sx = 1, sy = 1, sz = 1] = geometry.size || [1, 1, 1];
+  let meshGeometry;
+
+  if (geometry.type === 'cylinder') {
+    const radius = geometry.radius || sx || 0.1;
+    const height = geometry.height || sz || 1;
+    meshGeometry = new THREE.CylinderGeometry(radius, radius, height, 24);
+  } else if (geometry.type === 'sphere') {
+    meshGeometry = new THREE.SphereGeometry(geometry.radius || sx || 0.5, 24, 16);
+  } else if (geometry.type === 'plane') {
+    meshGeometry = new THREE.PlaneGeometry(sx, sy);
+  } else {
+    meshGeometry = new THREE.BoxGeometry(sx, sz, sy);
+  }
+
+  const baseColor = MATERIAL_COLORS[object.kind] || 0x9ca3af;
+  const material = new THREE.MeshStandardMaterial({
+    color: parseColor(object.material?.color, baseColor),
+    roughness: object.material?.roughness ?? 0.65,
+    metalness: object.material?.metalness ?? 0.05
+  });
+  const mesh = new THREE.Mesh(meshGeometry, material);
+  mesh.name = object.id;
+  mesh.position.copy(zUpToThreePosition(object.transform?.position));
+  mesh.rotation.copy(zUpRotationToThree(object.transform?.rotation));
+  mesh.scale.set(...(object.transform?.scale || [1, 1, 1]));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function addTableDetails(scene, object) {
+  if (object.kind !== 'table') return;
+
+  const [sx = 1.4, sy = 0.7, sz = 0.12] = object.geometry?.size || [];
+  const [x = 0, y = 0, z = 0.75] = object.transform?.position || [];
+  const legHeight = Math.max(0.55, z - sz / 2);
+  const legOffsetX = Math.max(0.2, sx / 2 - 0.12);
+  const legOffsetY = Math.max(0.15, sy / 2 - 0.12);
+  const legMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2d1f17,
+    roughness: 0.55,
+    metalness: 0.15
+  });
+
+  [
+    [legOffsetX, legOffsetY],
+    [-legOffsetX, legOffsetY],
+    [legOffsetX, -legOffsetY],
+    [-legOffsetX, -legOffsetY]
+  ].forEach(([dx, dy]) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, legHeight, 0.08), legMaterial);
+    leg.name = `${object.id}_leg`;
+    leg.position.copy(zUpToThreePosition([x + dx, y + dy, legHeight / 2]));
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    scene.add(leg);
+  });
+}
+
+function sceneSpecToRenderConfig(sceneSpec) {
+  if (!sceneSpec) return null;
+
+  const floorObject = sceneSpec.objects?.find(object => object.kind === 'floor');
+  const [floorWidth = 8, floorDepth = 6] = floorObject?.geometry?.size || [];
+  const walls = (sceneSpec.objects || [])
+    .filter(object => object.kind === 'wall')
+    .map(object => {
+      const [sizeX = 4, sizeY = 0.2, sizeZ = 3] = object.geometry?.size || [];
+      const rotationZ = object.transform?.rotation?.[2] || 0;
+      const verticalWall = sizeX < sizeY && rotationZ === 0;
+      return {
+        id: object.id,
+        position: object.transform?.position || [0, 0, sizeZ / 2],
+        width: verticalWall ? sizeY : sizeX,
+        height: sizeZ,
+        thickness: verticalWall ? sizeX : sizeY,
+        rotation: verticalWall ? 90 : rotationZ
+      };
+    });
+  const shots = (sceneSpec.cameras || []).map(camera => ({
+    shot_id: camera.id,
+    focal_length_mm: camera.focal_length_mm || 35,
+    start_position: camera.transform?.position || [0, -3, 1.5],
+    end_position: camera.look_at || [0, 0, 1.2],
+    duration_seconds: camera.duration_seconds || 5
+  }));
+
+  return {
+    floor: { width: floorWidth, depth: floorDepth },
+    walls,
+    shots
+  };
+}
+
+function getRenderConfig(sceneConfig, sceneSpec) {
+  return sceneConfig || sceneSpecToRenderConfig(sceneSpec);
+}
+
+export default function ThreeCanvas({ sceneConfig, sceneSpec }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -108,10 +422,11 @@ export default function ThreeCanvas({ sceneConfig }) {
     };
   }, []);
 
-  // Update Meshes & Camera Path whenever sceneConfig changes
+  // Update Meshes & Camera Path whenever sceneConfig or sceneSpec changes
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || !sceneConfig) return;
+    const renderConfig = getRenderConfig(sceneConfig, sceneSpec);
+    if (!scene || !renderConfig) return;
 
     // Clear dynamic meshes
     const toRemove = [];
@@ -122,7 +437,7 @@ export default function ThreeCanvas({ sceneConfig }) {
     });
     toRemove.forEach(obj => scene.remove(obj));
 
-    const { floor, walls, shots } = sceneConfig;
+    const { floor, walls, shots } = renderConfig;
 
     // 1. Render Floor Grid & Base Mesh
     if (floor) {
@@ -151,7 +466,7 @@ export default function ThreeCanvas({ sceneConfig }) {
 
     // 2. Render Wall Meshes (Architectural Plaster Finish)
     if (walls && walls.length > 0) {
-      walls.forEach((wall, idx) => {
+      walls.forEach((wall) => {
         const wWidth = wall.width || 4.0;
         const wHeight = wall.height || 3.0;
         const wThick = wall.thickness || 0.2;
@@ -184,7 +499,18 @@ export default function ThreeCanvas({ sceneConfig }) {
       });
     }
 
-    // 3. Render Camera Path & Shot Frustum
+    // 3. Render agent-authored props from the richer SceneSpec.
+    if (sceneSpec?.objects?.length > 0) {
+      sceneSpec.objects
+        .filter(object => !['floor', 'wall', 'ceiling'].includes(object.kind))
+        .forEach(object => {
+          const objectNode = createSceneObjectMesh(object);
+          scene.add(objectNode);
+          addTableDetails(scene, object);
+        });
+    }
+
+    // 4. Render Camera Path & Shot Frustum
     if (shots && shots.length > 0) {
       const activeShot = shots[activeShotIndex] || shots[0];
       const [sx, sy, sz] = activeShot.start_position || [-3, -2, 1.6];
@@ -252,13 +578,14 @@ export default function ThreeCanvas({ sceneConfig }) {
       camGroup.add(frustumLines);
       frustumHelperRef.current = frustumLines;
     }
-  }, [sceneConfig, activeShotIndex]);
+  }, [sceneConfig, sceneSpec, activeShotIndex]);
 
   // Camera Animation Loop
   useEffect(() => {
-    if (!isPlaying || !sceneConfig?.shots || sceneConfig.shots.length === 0) return;
+    const renderConfig = getRenderConfig(sceneConfig, sceneSpec);
+    if (!isPlaying || !renderConfig?.shots || renderConfig.shots.length === 0) return;
 
-    const shot = sceneConfig.shots[activeShotIndex] || sceneConfig.shots[0];
+    const shot = renderConfig.shots[activeShotIndex] || renderConfig.shots[0];
     const duration = (shot.duration_seconds || 5.0) * 1000;
     const [sx, sy, sz] = shot.start_position;
     const [ex, ey, ez] = shot.end_position;
@@ -284,7 +611,7 @@ export default function ThreeCanvas({ sceneConfig }) {
 
     animId = requestAnimationFrame(updatePosition);
     return () => cancelAnimationFrame(animId);
-  }, [isPlaying, sceneConfig, activeShotIndex]);
+  }, [isPlaying, sceneConfig, sceneSpec, activeShotIndex]);
 
   useEffect(() => {
     if (frustumHelperRef.current) {
@@ -334,7 +661,7 @@ export default function ThreeCanvas({ sceneConfig }) {
         </div>
 
         {/* Shot List Selector */}
-        {sceneConfig?.shots && sceneConfig.shots.length > 0 && (
+        {getRenderConfig(sceneConfig, sceneSpec)?.shots?.length > 0 && (
           <div className="ph-card" style={{
             padding: '8px 14px',
             display: 'flex',
@@ -361,7 +688,7 @@ export default function ThreeCanvas({ sceneConfig }) {
                 outline: 'none'
               }}
             >
-              {sceneConfig.shots.map((shot, idx) => (
+              {getRenderConfig(sceneConfig, sceneSpec).shots.map((shot, idx) => (
                 <option key={shot.shot_id || idx} value={idx}>
                   {shot.shot_id} ({shot.focal_length_mm}mm)
                 </option>

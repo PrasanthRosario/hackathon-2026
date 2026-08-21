@@ -1,6 +1,13 @@
 import React from 'react';
 import { Film, Box, Cpu, Sparkles, CheckCircle2, ShieldAlert } from 'lucide-react';
 
+function getRouteLabel(currentModel) {
+  if (!currentModel) return 'haiku-latest';
+  if (currentModel === 'usd-script-agent') return 'USD Agent';
+  if (currentModel === 'deterministic-fallback') return 'Fallback';
+  return currentModel.split('/')[1] || currentModel;
+}
+
 export default function Header({ currentModel, usdStatus, onLoadPreset }) {
   return (
     <header style={{
@@ -71,7 +78,7 @@ export default function Header({ currentModel, usdStatus, onLoadPreset }) {
         {/* Model Route Badge */}
         <div className="ph-badge ph-badge-orange" style={{ padding: '5px 12px' }}>
           <Cpu size={13} />
-          <span>Route: {currentModel ? currentModel.split('/')[1] || currentModel : 'haiku-latest'}</span>
+          <span>Route: {getRouteLabel(currentModel)}</span>
         </div>
 
         {/* USD Generation Status */}

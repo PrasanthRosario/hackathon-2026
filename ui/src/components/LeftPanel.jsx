@@ -1,15 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, CheckCircle2, Cpu, Sparkles, Box, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, CheckCircle2, Cpu, Sparkles, Box, ChevronDown, ChevronUp, Download } from 'lucide-react';
+
+function getModelLabel(modelUsed) {
+  if (!modelUsed) return null;
+  if (modelUsed.includes('deterministic')) return 'Local Agent';
+  if (modelUsed === 'usd-script-agent') return 'USD Agent';
+  if (modelUsed === 'deterministic-fallback') return 'Fallback';
+  if (modelUsed.includes('haiku')) return 'Haiku';
+  if (modelUsed.includes('sonnet')) return 'Sonnet';
+  if (modelUsed.includes('opus')) return 'Opus';
+  if (modelUsed === 'error') return 'Error';
+  if (modelUsed === 'preset') return 'Preset';
+  return 'Offset Agent';
+}
 
 export default function LeftPanel({
   messages,
   onSendMessage,
+  chatMode,
+  onChatModeChange,
   isLoading,
   sceneConfig,
   readableSummary,
   readyForConfirmation,
   onConfirmGenerateUSD,
   isGeneratingUSD,
+  isDownloadingPromptUSD,
+  onDownloadPromptUSD,
   usdStatus,
   onCheckCoverage,
   onCheckPhysics,
@@ -33,6 +50,11 @@ export default function LeftPanel({
   const handleQuickPrompt = (prompt) => {
     if (isLoading) return;
     onSendMessage(prompt);
+  };
+
+  const handleDownloadPromptUSD = () => {
+    if (!inputText.trim() || isLoading || isDownloadingPromptUSD) return;
+    onDownloadPromptUSD(inputText.trim());
   };
 
   return (
@@ -72,13 +94,62 @@ export default function LeftPanel({
               Set Assistant
             </h2>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-              OpenRouter Multi-Model Agent
+              Scene operation chat flow
             </p>
           </div>
         </div>
 
         <div className="ph-badge ph-badge-grey">
           <span>FASTAPI BACKEND</span>
+        </div>
+      </div>
+
+      <div style={{
+        padding: '10px 20px',
+        backgroundColor: 'var(--bg-surface)',
+        borderBottom: '1px solid var(--border-light)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px'
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '10.5px',
+          color: 'var(--text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          Chat API
+        </span>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '4px',
+          padding: '4px',
+          backgroundColor: '#0F172A',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: '8px',
+          width: '250px'
+        }}>
+          <button
+            type="button"
+            className={`ph-btn ph-btn-sm ${chatMode === 'preview' ? 'ph-btn-primary' : ''}`}
+            style={{ padding: '5px 8px', fontSize: '11.5px' }}
+            onClick={() => onChatModeChange('preview')}
+          >
+            <Box size={13} />
+            Preview
+          </button>
+          <button
+            type="button"
+            className={`ph-btn ph-btn-sm ${chatMode === 'usd-file' ? 'ph-btn-yellow' : ''}`}
+            style={{ padding: '5px 8px', fontSize: '11.5px' }}
+            onClick={() => onChatModeChange('usd-file')}
+          >
+            <Download size={13} />
+            USD File
+          </button>
         </div>
       </div>
 
@@ -114,7 +185,7 @@ export default function LeftPanel({
               </span>
               {msg.model_used && (
                 <span className="ph-badge ph-badge-orange" style={{ fontSize: '9px', padding: '1px 6px' }}>
-                  {msg.model_used.includes('haiku') ? 'Haiku 3.5' : msg.model_used.includes('sonnet') ? 'Sonnet 3.5' : 'Opus'}
+                  {getModelLabel(msg.model_used)}
                 </span>
               )}
             </div>
@@ -152,7 +223,7 @@ export default function LeftPanel({
               color: 'var(--text-muted)'
             }}>
               <Cpu size={14} className="animate-spin" style={{ color: 'var(--accent-orange)' }} />
-              <span>Routing model via OpenRouter...</span>
+              <span>{chatMode === 'usd-file' ? 'Generating downloadable USD...' : 'Sending scene request to backend...'}</span>
             </div>
           </div>
         )}
@@ -314,7 +385,9 @@ export default function LeftPanel({
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Describe set (e.g. 2 walls, floor and ceiling, table and chair)..."
+          placeholder={chatMode === 'usd-file'
+            ? 'Describe USD scene to generate and download...'
+            : 'Describe set (e.g. 2 walls, floor and ceiling, table and chair)...'}
           disabled={isLoading}
           style={{
             flex: 1,
@@ -334,8 +407,23 @@ export default function LeftPanel({
           className="ph-btn ph-btn-primary"
           style={{ padding: '0 18px' }}
         >
-          <Send size={16} />
+          {chatMode === 'usd-file' ? <Download size={16} /> : <Send size={16} />}
         </button>
+        {chatMode === 'preview' && (
+          <button
+            type="button"
+            disabled={isLoading || isDownloadingPromptUSD || !inputText.trim()}
+            className="ph-btn ph-btn-yellow"
+            style={{ padding: '0 14px' }}
+            onClick={handleDownloadPromptUSD}
+            title="Generate and download USD from prompt"
+          >
+            <Download size={16} />
+            <span style={{ fontSize: '11.5px' }}>
+              {isDownloadingPromptUSD ? 'USD...' : 'USD'}
+            </span>
+          </button>
+        )}
       </form>
     </div>
   );
