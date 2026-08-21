@@ -18,7 +18,12 @@ Requires no GPU. Tested with usd-core on macOS (Apple Silicon + Intel)
 and Linux, Python 3.10/3.11 recommended (3.13 can be flaky for USD).
 """
 
-from pxr import Usd, UsdGeom, Gf, Sdf
+from pxr import Gf, Usd, UsdGeom
+
+try:
+    from .paths import DEFAULT_SET_PATH
+except ImportError:
+    from paths import DEFAULT_SET_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +98,8 @@ def add_camera(stage: Usd.Stage, path: str, translate, look_at,
 # Build the set
 # ---------------------------------------------------------------------------
 
-def build_set(out_path: str = "set.usda") -> Usd.Stage:
+def build_set(out_path: str | None = None) -> Usd.Stage:
+    out_path = str(out_path or DEFAULT_SET_PATH)
     stage = Usd.Stage.CreateNew(out_path)
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
@@ -102,7 +108,7 @@ def build_set(out_path: str = "set.usda") -> Usd.Stage:
     stage.SetDefaultPrim(world.GetPrim())
 
     # --- Room: an 8m x 6m x 3.2m interior box (floor + 4 walls) ---------
-    room = UsdGeom.Xform.Define(stage, "/World/Room")
+    UsdGeom.Xform.Define(stage, "/World/Room")
 
     wall_h = 3.2
     wall_t = 0.2
@@ -127,7 +133,7 @@ def build_set(out_path: str = "set.usda") -> Usd.Stage:
     wall("WallWest", (-room_w / 2, 0, wall_h / 2), (wall_t, room_d, wall_h))
 
     # --- Props: set dressing standing in for furniture/crates ----------
-    props = UsdGeom.Xform.Define(stage, "/World/Props")
+    UsdGeom.Xform.Define(stage, "/World/Props")
     add_cube(stage, "/World/Props/TableA", 1.0, (-1.5, 0.5, 0.4),
               color=(0.4, 0.28, 0.16))
     add_cube(stage, "/World/Props/CrateA", 0.6, (2.0, -1.0, 0.3),
@@ -174,7 +180,7 @@ def build_set(out_path: str = "set.usda") -> Usd.Stage:
 
 
 if __name__ == "__main__":
-    stage = build_set("set.usda")
+    stage = build_set()
     print(f"Wrote {stage.GetRootLayer().realPath}")
     print("\nScene contents:")
     for prim in stage.Traverse():

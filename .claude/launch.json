@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "offset-ui",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd ui && npm run dev"],
+      "port": 5173
+    }
+  ]
+}

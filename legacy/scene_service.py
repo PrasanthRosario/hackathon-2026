@@ -17,7 +17,13 @@ Requires no GPU. Tested with usd-core.
 """
 
 import math
-from pxr import Usd, UsdGeom, Gf
+
+from pxr import Gf, Usd, UsdGeom
+
+try:
+    from .paths import DEFAULT_SET_PATH
+except ImportError:
+    from paths import DEFAULT_SET_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -357,7 +363,7 @@ def validate_shot(stage: Usd.Stage, shot: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    stage = Usd.Stage.Open("set.usda")
+    stage = Usd.Stage.Open(str(DEFAULT_SET_PATH))
 
     print("=== inspect_scene ===")
     summary = inspect_scene(stage)

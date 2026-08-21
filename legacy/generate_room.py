@@ -21,10 +21,16 @@ the file, OR paste the build_room() body into Isaac Sim's Script Editor
 to build it directly on the running stage instead of writing a file.
 """
 
-from pxr import Usd, UsdGeom, UsdPhysics, Sdf, Gf
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
+
+try:
+    from .paths import DEFAULT_ROOM_SET_PATH
+except ImportError:
+    from paths import DEFAULT_ROOM_SET_PATH
 
 
-def build_room(stage_path="room_set.usda"):
+def build_room(stage_path=None):
+    stage_path = str(stage_path or DEFAULT_ROOM_SET_PATH)
     stage = Usd.Stage.CreateNew(stage_path)
 
     # --- Stage setup ---------------------------------------------------
