@@ -18,10 +18,6 @@ import omni.usd
 import omni.timeline
 from pxr import Usd, UsdGeom, Gf
 
-stage = omni.usd.get_context().get_stage()
-camera_prim = stage.GetPrimAtPath("/World/MainCamera")
-cam_schema = UsdGeom.Camera(camera_prim)
-xformable = UsdGeom.Xformable(camera_prim)
 timeline = omni.timeline.get_timeline_interface()
 physx_query = omni.physx.get_physx_scene_query_interface()
 
@@ -74,7 +70,7 @@ def check_camera_body_collision(eye, radius=0.15):
     return hit_paths
 
 
-def check_shot(current_frame):
+def check_shot(stage, xformable, cam_schema, current_frame):
     world_m = xformable.ComputeLocalToWorldTransform(Usd.TimeCode(current_frame))
     eye = world_m.ExtractTranslation()
     corner_dirs, far = get_frustum_sample_dirs(cam_schema)
@@ -106,8 +102,19 @@ def on_update(event):
     if not stage:
         return
 
+    # Re-fetch these fresh every frame instead of once at script-load
+    # time -- if a "build_scene" bridge command opened a new stage
+    # since this script started, the old prim/xformable handles below
+    # would point at a stage that no longer exists and every schema
+    # access on them would raise "Accessed schema on invalid prim".
+    camera_prim = stage.GetPrimAtPath("/World/MainCamera")
+    if not camera_prim.IsValid():
+        return
+    cam_schema = UsdGeom.Camera(camera_prim)
+    xformable = UsdGeom.Xformable(camera_prim)
+
     current_frame = timeline.get_current_time() * timeline.get_time_codes_per_second()
-    results, colliding_with = check_shot(current_frame)
+    results, colliding_with = check_shot(stage, xformable, cam_schema, current_frame)
     flagged_corners = [r for r in results if r["off_set"]]
 
     if colliding_with:
