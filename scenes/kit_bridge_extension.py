@@ -38,9 +38,19 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 # whichever one it's told to -- it doesn't need to know how any of them
 # were built. These are shorthands for the two checked-in demo scenes;
 # a dynamically generated scene just passes its own "usda_path" instead.
+try:
+    # Resolves next to this file (scenes/scene1/, scenes/scene2/)
+    # regardless of where the repo is actually checked out.
+    _SCENES_DIR = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # __file__ isn't set when this is paste-and-run in the Script
+    # Editor rather than executed from disk -- fall back to a fixed
+    # path. Update this if your checkout isn't at ~/hackathon-2026.
+    _SCENES_DIR = os.path.expanduser("~/hackathon-2026/scenes")
+
 SCENE_PATHS = {
-    "scene1": "/home/ubuntu/scenes/scene1/podcast_room.usda",
-    "scene2": "/home/ubuntu/scenes/scene2/studio_room.usda",
+    "scene1": os.path.join(_SCENES_DIR, "scene1", "podcast_room.usda"),
+    "scene2": os.path.join(_SCENES_DIR, "scene2", "studio_room.usda"),
 }
 
 
