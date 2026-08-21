@@ -1,0 +1,452 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    endTimeCode = 72
+    metersPerUnit = 1
+    startTimeCode = 0
+    timeCodesPerSecond = 24
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Xform "SetBoundary"
+    {
+        custom bool is_set_boundary = 1
+
+        def Cube "Floor" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.55, 0.55, 0.55)]
+            double size = 1
+            float3 xformOp:scale = (6, 5, 0.1)
+            double3 xformOp:translate = (0, 0, -0.05)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Wall_North" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.55, 0.55, 0.55)]
+            double size = 1
+            float3 xformOp:scale = (6, 0.1, 2.7)
+            double3 xformOp:translate = (0, 2.5, 1.35)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Wall_South" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.55, 0.55, 0.55)]
+            double size = 1
+            float3 xformOp:scale = (6, 0.1, 2.7)
+            double3 xformOp:translate = (0, -2.5, 1.35)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Wall_West" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.55, 0.55, 0.55)]
+            double size = 1
+            float3 xformOp:scale = (0.1, 5, 2.7)
+            double3 xformOp:translate = (-3, 0, 1.35)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Wall_East_A" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.55, 0.55, 0.55)]
+            double size = 1
+            float3 xformOp:scale = (0.1, 1.95, 2.7)
+            double3 xformOp:translate = (3, 1.525, 1.35)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Wall_East_B" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.55, 0.55, 0.55)]
+            double size = 1
+            float3 xformOp:scale = (0.1, 1.95, 2.7)
+            double3 xformOp:translate = (3, -1.525, 1.35)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+
+    def Xform "Backstage_Void"
+    {
+        custom bool is_off_set = 1
+
+        def Cube "VoidPlane"
+        {
+            color3f[] primvars:displayColor = [(0.9, 0.1, 0.1)]
+            double size = 1
+            float3 xformOp:scale = (4, 1.1, 2.7)
+            double3 xformOp:translate = (5, 0, 1.35)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+
+    def "SetDressing"
+    {
+        def Cube "AcousticPanel_0_0"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-1.7499999999999998, 2.4200000000000004, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_0_1"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-1.0499999999999998, 2.4200000000000004, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_0_2"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-0.34999999999999987, 2.4200000000000004, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_0_3"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (0.34999999999999987, 2.4200000000000004, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_0_4"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (1.05, 2.4200000000000004, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_0_5"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (1.7500000000000002, 2.4200000000000004, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_1_0"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-1.7499999999999998, 2.4200000000000004, 1.2)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_1_1"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-1.0499999999999998, 2.4200000000000004, 1.2)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_1_2"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-0.34999999999999987, 2.4200000000000004, 1.2)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_1_3"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (0.34999999999999987, 2.4200000000000004, 1.2)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_1_4"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (1.05, 2.4200000000000004, 1.2)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_1_5"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (1.7500000000000002, 2.4200000000000004, 1.2)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_2_0"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-1.7499999999999998, 2.4200000000000004, 1.9)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_2_1"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-1.0499999999999998, 2.4200000000000004, 1.9)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_2_2"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (-0.34999999999999987, 2.4200000000000004, 1.9)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_2_3"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (0.34999999999999987, 2.4200000000000004, 1.9)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_2_4"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (1.05, 2.4200000000000004, 1.9)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "AcousticPanel_2_5"
+        {
+            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
+            double size = 1
+            float3 xformOp:scale = (0.6, 0.05, 0.6)
+            double3 xformOp:translate = (1.7500000000000002, 2.4200000000000004, 1.9)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Desk_Top" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.35, 0.22, 0.12)]
+            double size = 1
+            float3 xformOp:scale = (1.6, 0.7, 0.05)
+            double3 xformOp:translate = (0, 0.6, 0.75)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cylinder "Desk_Leg_n0p72_0p33"
+        {
+            uniform token axis = "Z"
+            double height = 0.7
+            color3f[] primvars:displayColor = [(0.1, 0.1, 0.1)]
+            double radius = 0.03
+            double3 xformOp:translate = (-0.7200000000000001, 0.33, 0.35)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Desk_Leg_0p72_0p33"
+        {
+            uniform token axis = "Z"
+            double height = 0.7
+            color3f[] primvars:displayColor = [(0.1, 0.1, 0.1)]
+            double radius = 0.03
+            double3 xformOp:translate = (0.7200000000000001, 0.33, 0.35)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Desk_Leg_n0p72_0p87"
+        {
+            uniform token axis = "Z"
+            double height = 0.7
+            color3f[] primvars:displayColor = [(0.1, 0.1, 0.1)]
+            double radius = 0.03
+            double3 xformOp:translate = (-0.7200000000000001, 0.87, 0.35)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Desk_Leg_0p72_0p87"
+        {
+            uniform token axis = "Z"
+            double height = 0.7
+            color3f[] primvars:displayColor = [(0.1, 0.1, 0.1)]
+            double radius = 0.03
+            double3 xformOp:translate = (0.7200000000000001, 0.87, 0.35)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "Chair_0_Seat" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.12, 0.12, 0.14)]
+            double size = 1
+            float3 xformOp:scale = (0.45, 0.45, 0.06)
+            double3 xformOp:translate = (-0.5, -0.30000000000000004, 0.45)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Chair_0_Back" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.12, 0.12, 0.14)]
+            double size = 1
+            float3 xformOp:scale = (0.45, 0.06, 0.5)
+            double3 xformOp:translate = (-0.5, -0.5, 0.73)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cylinder "Chair_0_Post"
+        {
+            uniform token axis = "Z"
+            double height = 0.45
+            color3f[] primvars:displayColor = [(0.2, 0.2, 0.2)]
+            double radius = 0.04
+            double3 xformOp:translate = (-0.5, -0.30000000000000004, 0.225)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "Chair_1_Seat" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.12, 0.12, 0.14)]
+            double size = 1
+            float3 xformOp:scale = (0.45, 0.45, 0.06)
+            double3 xformOp:translate = (0.5, -0.30000000000000004, 0.45)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Chair_1_Back" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            color3f[] primvars:displayColor = [(0.12, 0.12, 0.14)]
+            double size = 1
+            float3 xformOp:scale = (0.45, 0.06, 0.5)
+            double3 xformOp:translate = (0.5, -0.5, 0.73)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cylinder "Chair_1_Post"
+        {
+            uniform token axis = "Z"
+            double height = 0.45
+            color3f[] primvars:displayColor = [(0.2, 0.2, 0.2)]
+            double radius = 0.04
+            double3 xformOp:translate = (0.5, -0.30000000000000004, 0.225)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Mic_0_Stand"
+        {
+            uniform token axis = "Z"
+            double height = 0.35
+            color3f[] primvars:displayColor = [(0.05, 0.05, 0.05)]
+            double radius = 0.015
+            double3 xformOp:translate = (-0.5, 0.5499999999999999, 0.9750000000000001)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Mic_0_Capsule"
+        {
+            uniform token axis = "Z"
+            double height = 0.12
+            color3f[] primvars:displayColor = [(0.4, 0.4, 0.4)]
+            double radius = 0.03
+            double3 xformOp:translate = (-0.5, 0.44999999999999996, 1.1800000000000002)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Mic_1_Stand"
+        {
+            uniform token axis = "Z"
+            double height = 0.35
+            color3f[] primvars:displayColor = [(0.05, 0.05, 0.05)]
+            double radius = 0.015
+            double3 xformOp:translate = (0.5, 0.5499999999999999, 0.9750000000000001)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "Mic_1_Capsule"
+        {
+            uniform token axis = "Z"
+            double height = 0.12
+            color3f[] primvars:displayColor = [(0.4, 0.4, 0.4)]
+            double radius = 0.03
+            double3 xformOp:translate = (0.5, 0.44999999999999996, 1.1800000000000002)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "KeyLight_Ring"
+        {
+            uniform token axis = "Z"
+            double height = 0.03
+            color3f[] primvars:displayColor = [(0.95, 0.9, 0.75)]
+            double radius = 0.25
+            double3 xformOp:translate = (0, -1.05, 1.55)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cylinder "KeyLight_Stand"
+        {
+            uniform token axis = "Z"
+            double height = 1.55
+            color3f[] primvars:displayColor = [(0.1, 0.1, 0.1)]
+            double radius = 0.02
+            double3 xformOp:translate = (0, -1.05, 0.775)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Camera "MainCamera"
+    {
+        float2 clippingRange = (0.1, 30)
+        float focalLength = 35
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        matrix4d xformOp:transform.timeSamples = {
+            0: ( (0.9541464875877229, -0.2993400745373248, 0, 0), (0.02233865602348696, 0.0712044660748647, 0.997211566548472, 0), (-0.29850538466010207, -0.9514859136040754, 0.07462634616502559, 0), (-0.8, -1.9500000000000002, 1.35, 1) ),
+            36: ( (0.9871054777475852, -0.16007115855366244, 0, 0), (0.016985410240008488, 0.10474336314671903, 0.994354224467163, 0), (-0.15916743272318729, -0.9815325017929883, 0.10611162181545829, 0), (-0.3, -1.25, 1.35, 1) ),
+            72: ( (0, 0, 0, 0), (0, 0, 0, 0), (-0, -0, -1, 0), (0, 0.6, 0.75, 1) ),
+        }
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+}
+
