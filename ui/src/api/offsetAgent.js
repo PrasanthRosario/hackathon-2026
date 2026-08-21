@@ -42,7 +42,12 @@ export async function downloadUsdFromPrompt({ prompt, messages = [], outputFilen
     throw new Error(`Backend API ${response.status}: ${text || response.statusText}`);
   }
 
-  return response.blob();
+  const blob = await response.blob();
+  return {
+    blob,
+    source: response.headers.get('X-Offset-USD-Source') || 'unknown',
+    sizeBytes: blob.size
+  };
 }
 
 export function generateUsd({ sceneConfig, currentScene, outputFilename = 'generated_set.usda' }) {

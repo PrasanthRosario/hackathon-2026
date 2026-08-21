@@ -104,15 +104,16 @@ def generate_usd_file_from_chat(request: USDScriptChatRequest):
     """Generate a downloadable USDA file directly from a prompt-authored Python script."""
     try:
         output_filename = request.output_filename or "agent_generated.usda"
-        usd_path, _script = generate_usd_file_from_prompt(
+        generation = generate_usd_file_from_prompt(
             prompt=request.prompt,
             messages=request.messages,
             output_filename=output_filename,
         )
         return FileResponse(
-            usd_path,
+            generation.path,
             media_type="model/vnd.usda",
             filename=output_filename if output_filename.endswith(".usda") else f"{output_filename}.usda",
+            headers={"X-Offset-USD-Source": generation.source},
         )
     except Exception as e:  # noqa: BLE001 - API boundary maps generator failures to HTTP 500.
         traceback.print_exc()

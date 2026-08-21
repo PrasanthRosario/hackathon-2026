@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from main import app
+from modules.offset_agent import usd_script_agent
 from modules.offset_agent.deep_agent import (
     _coerce_scene_operations,
     _ensure_scene_completion,
@@ -12,7 +13,12 @@ from modules.offset_agent.scene_ops import (
     default_scene_spec,
     scene_spec_to_config,
 )
-from modules.offset_agent.usd_script_agent import _run_usd_script
+from modules.offset_agent.usd_script_agent import (
+    _cooking_usd_script,
+    _podcast_usd_script,
+    _run_usd_script,
+    _validate_usda_content,
+)
 
 
 def test_chat_endpoint_returns_scene_operations_without_remote_model(monkeypatch):
@@ -123,8 +129,132 @@ def test_chat_usd_file_endpoint_returns_downloadable_usda(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("model/vnd.usda")
     assert "attachment" in response.headers["content-disposition"]
+    assert response.headers["x-offset-usd-source"] == "deterministic-fallback"
     assert b"#usda" in response.content
     assert b'def Xform "World"' in response.content
+
+
+def test_chat_usd_file_church_template_returns_rich_open_world_usda(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/chat-usd-file",
+        json={
+            "prompt": (
+                "Create an open-world church courtyard with trees, people roaming around, "
+                "a hero wearing white, and wide cameras"
+            ),
+            "messages": [],
+            "output_filename": "church_open_world.usda",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b'def Xform "Crowd"' in response.content
+    assert b'def Xform "Trees"' in response.content
+    assert b"HeroWhite" in response.content
+    assert response.content.count(b"Extra_") >= 12
+    assert response.content.count(b"Tree_") >= 8
+
+
+def test_podcast_usd_template_avoids_inline_prim_blocks():
+    usd_content = _run_usd_script(_podcast_usd_script())
+
+    assert b'def DistantLight "KeyLight" { float intensity' not in usd_content.encode()
+    assert b'def Camera "WideCamera" { float focalLength' not in usd_content.encode()
+    assert 'def DistantLight "KeyLight"\n        {' in usd_content
+    assert 'def Camera "WideCamera"\n        {' in usd_content
+
+
+def test_cooking_usd_template_has_animated_open_camera_stage():
+    usd_content = _run_usd_script(_cooking_usd_script())
+
+    assert "startTimeCode = 0" in usd_content
+    assert "endTimeCode = 96" in usd_content
+    assert "timeCodesPerSecond = 24" in usd_content
+    assert "MasterDollyCamera" in usd_content
+    assert usd_content.count("xformOp:transform.timeSamples") >= 2
+    assert "xformOp:rotateXYZ" not in usd_content
+    assert "Ceiling" not in usd_content
+
+
+def test_invalid_llm_usd_camera_and_cube_patterns_are_rejected():
+    bad_content = """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Cube "OversizedWall"
+    {
+        double3 xformOp:translate = (0, 4, 1.75)
+        double3 xformOp:scale = (10, 0.15, 1.75)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Camera "BadCamera"
+    {
+        float focalLength = 24
+        double3 xformOp:translate = (0, -7.5, 1.6)
+        float3 xformOp:rotateXYZ = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+}
+"""
+
+    try:
+        _validate_usda_content(bad_content)
+    except RuntimeError as exc:
+        assert "rotateXYZ cameras" in str(exc) or "Cube prims" in str(exc)
+    else:
+        raise AssertionError("Expected invalid camera/cube USDA to be rejected.")
+
+
+def test_chat_usd_file_uses_deepagent_when_openrouter_key_exists(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "configured")
+    called = {"value": False}
+
+    def fake_generate_script(prompt, messages):
+        called["value"] = True
+        return '''USD_CONTENT = """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Cube "LLMGeneratedIsland"
+    {
+        double size = 1
+        double3 xformOp:scale = (2, 1, 0.9)
+        double3 xformOp:translate = (0, 0, 0.45)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        color3f[] primvars:displayColor = [(0.8, 0.75, 0.68)]
+    }
+}
+"""'''
+
+    monkeypatch.setattr(usd_script_agent, "_generate_script_with_deep_agent", fake_generate_script)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/chat-usd-file",
+        json={
+            "prompt": "Create a simple gallery installation set",
+            "messages": [],
+            "output_filename": "llm_cooking.usda",
+        },
+    )
+
+    assert response.status_code == 200
+    assert called["value"] is True
+    assert response.headers["x-offset-usd-source"] == "llm-deepagent"
+    assert b"LLMGeneratedIsland" in response.content
 
 
 def test_usd_script_runner_blocks_file_io():

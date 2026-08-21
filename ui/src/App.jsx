@@ -38,6 +38,27 @@ export default function App() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isApplyingFix, setIsApplyingFix] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [chatMode, setChatMode] = useState('preview');
+
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const filenameFromPrompt = (prompt) => {
+    const slug = prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 48);
+    return `${slug || 'agent_generated'}.usda`;
+  };
 
   // Send conversational turn to FastAPI backend (/api/chat)
   const handleSendMessage = async (text) => {
@@ -47,6 +68,45 @@ export default function App() {
     setIsLoading(true);
 
     try {
+      if (chatMode === 'usd-file') {
+        const outputFilename = filenameFromPrompt(text);
+        setIsDownloadingPromptUSD(true);
+        const download = await downloadUsdFromPrompt({
+          prompt: text,
+          messages,
+          outputFilename
+        });
+        downloadBlob(download.blob, outputFilename);
+
+        const previewData = await sendChatTurn({
+          messages: updatedMessages,
+          currentConfig: sceneConfig,
+          currentScene
+        });
+
+        setCurrentModel(download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback');
+        setReadyForConfirmation(previewData.ready_for_confirmation);
+        if (previewData.scene_config) {
+          setSceneConfig(previewData.scene_config);
+        }
+        if (previewData.scene) {
+          setCurrentScene(previewData.scene);
+        }
+        if (previewData.readable_summary) {
+          setReadableSummary(previewData.readable_summary);
+        }
+
+        setMessages([
+          ...updatedMessages,
+          {
+            role: 'assistant',
+            content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes). I also updated the Three.js preview from the same prompt.`,
+            model_used: download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback'
+          }
+        ]);
+        return;
+      }
+
       const data = await sendChatTurn({
         messages: updatedMessages,
         currentConfig: sceneConfig,
@@ -80,11 +140,12 @@ export default function App() {
         ...updatedMessages,
         {
           role: 'assistant',
-          content: `Sorry, I could not reach the backend chat API. ${err.message}`,
+          content: `Sorry, I could not complete that chat request. ${err.message}`,
           model_used: 'error'
         }
       ]);
     } finally {
+      setIsDownloadingPromptUSD(false);
       setIsLoading(false);
     }
   };
@@ -123,19 +184,21 @@ export default function App() {
     setIsDownloadingPromptUSD(true);
 
     try {
-      const blob = await downloadUsdFromPrompt({
+      const outputFilename = filenameFromPrompt(prompt);
+      const download = await downloadUsdFromPrompt({
         prompt,
         messages,
-        outputFilename: 'agent_generated.usda'
+        outputFilename
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'agent_generated.usda';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(download.blob, outputFilename);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes).`,
+          model_used: download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback'
+        }
+      ]);
     } catch (err) {
       console.error('Download USD error:', err);
       setMessages(prev => [
@@ -437,6 +500,8 @@ export default function App() {
         <LeftPanel
           messages={messages}
           onSendMessage={handleSendMessage}
+          chatMode={chatMode}
+          onChatModeChange={setChatMode}
           isLoading={isLoading}
           sceneConfig={sceneConfig}
           readableSummary={readableSummary}
