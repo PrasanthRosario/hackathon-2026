@@ -150,7 +150,12 @@ def build_mannequin(stage, parent, seat_pos, skin_mat, shirt_mat):
 # Build
 # =======================================================================
 
-def build_room(stage_path="studio_room.usda", bad_shot=False):
+def build_room(stage_path="studio_room.usda", mode="good"):
+    """mode: "good" (framed on host), "bad" (aimed off-set into the
+    void -- for the frustum/off-set check), or "camera_stuck" (eye
+    ends up embedded inside a wall -- for the camera-body collision
+    check, isolated from the off-set check by keeping the target on
+    the host)."""
     stage = Usd.Stage.CreateNew(stage_path)
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
@@ -296,17 +301,28 @@ def build_room(stage_path="studio_room.usda", bad_shot=False):
     camera.CreateHorizontalApertureAttr(36.0)
     camera.CreateVerticalApertureAttr(24.0)
     camera.CreateClippingRangeAttr(Gf.Vec2f(0.1, 8.0))
-    if bad_shot:
+    head_target = (0, seat_y, seat_h + 0.55)  # head height of the seated mannequin
+
+    if mode == "bad":
         # Same room, same camera path -- but the dolly ends up aimed
         # through the off-set door gap into the backstage void instead
         # of the host, so run_validation should flip to FLAGGED.
         void_target = (room_w / 2 + 2.0, 0, room_h / 2)
         animate_camera_move(stage, camera.GetPrim(), [
-            (0.0, (0, seat_y - 1.9, 1.6), (0, seat_y, seat_h + 0.55)),  # starts on the host
-            (3.0, (0, seat_y - 1.3, 1.4), void_target),                  # swings into the void
+            (0.0, (0, seat_y - 1.9, 1.6), head_target),  # starts on the host
+            (3.0, (0, seat_y - 1.3, 1.4), void_target),  # swings into the void
+        ])
+    elif mode == "camera_stuck":
+        # Target stays on the host the whole time (frustum/off-set
+        # check should stay OK) but the dolly overshoots into
+        # Wall_West -- isolates the camera-body collision check from
+        # the off-set check so you can confirm they fire independently.
+        wall_west_center = (-room_w / 2, 0, room_h / 2)
+        animate_camera_move(stage, camera.GetPrim(), [
+            (0.0, (0, seat_y - 1.9, 1.6), head_target),      # wide establishing
+            (3.0, wall_west_center, head_target),             # overshoots into the wall
         ])
     else:
-        head_target = (0, seat_y, seat_h + 0.55)  # head height of the seated mannequin
         animate_camera_move(stage, camera.GetPrim(), [
             (0.0, (0, seat_y - 1.9, 1.6), head_target),   # wide establishing
             (3.0, (0, seat_y - 1.3, 1.4), head_target),   # dolly-in to host
@@ -318,8 +334,9 @@ def build_room(stage_path="studio_room.usda", bad_shot=False):
 
 
 if __name__ == "__main__":
-    build_room("studio_room.usda", bad_shot=False)
-    build_room("studio_room_bad_shot.usda", bad_shot=True)
+    build_room("studio_room.usda", mode="good")
+    build_room("studio_room_bad_shot.usda", mode="bad")
+    build_room("studio_room_camera_stuck.usda", mode="camera_stuck")
 
 # -----------------------------------------------------------------------
 # To get an actually realistic person instead of this mannequin:
