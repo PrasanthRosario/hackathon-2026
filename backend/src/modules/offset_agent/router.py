@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import traceback
 from typing import Dict, Any
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException, Body
 
 from modules.offset_agent.models import (
@@ -43,6 +45,39 @@ ISAAC_SIM_PYTHON = os.environ.get("ISAAC_SIM_PYTHON", os.path.expanduser("~/Isaa
 _SCENES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "scenes"))
 STANDALONE_VALIDATE_SCRIPT = os.path.join(_SCENES_DIR, "standalone_render_and_validate.py")
 FRAMES_TO_VIDEO_SCRIPT = os.path.join(_SCENES_DIR, "frames_to_video.py")
+
+# Where /validate-usd uploads its render output. Credentials come from the
+# EC2 instance role (no keys needed) -- region is explicit because this box
+# has no ~/.aws/config or AWS_REGION env var set.
+S3_RENDERS_BUCKET = os.environ.get("S3_RENDERS_BUCKET", "s3-offframe-renders")
+AWS_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+
+
+def _upload_dir_to_s3_and_clear(local_dir: str, bucket: str, prefix: str, url_expiry_seconds: int = 86400) -> Dict[str, str]:
+    """
+    Uploads every file directly inside local_dir to s3://bucket/prefix/<filename>,
+    and ONLY on full success deletes local_dir -- if any upload fails, nothing
+    local is removed, so a bucket/permissions problem never loses render output.
+    Returns {filename: presigned_get_url}.
+    """
+    s3 = boto3.client("s3", region_name=AWS_REGION)
+    filenames = [f for f in os.listdir(local_dir) if os.path.isfile(os.path.join(local_dir, f))]
+
+    urls: Dict[str, str] = {}
+    try:
+        for filename in filenames:
+            key = f"{prefix}{filename}"
+            s3.upload_file(os.path.join(local_dir, filename), bucket, key)
+            urls[filename] = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=url_expiry_seconds,
+            )
+    except (BotoCoreError, ClientError) as e:
+        raise HTTPException(status_code=500, detail=f"S3 upload to 's3://{bucket}/{prefix}' failed: {str(e)}")
+
+    shutil.rmtree(local_dir)
+    return urls
 
 
 def _resolve_renders_dir() -> str:
@@ -466,14 +501,26 @@ def validate_usd_stage(request: ValidateUSDRequest):
         stderr_detail = video_res.stderr.strip() or video_res.stdout.strip() or "Unknown ffmpeg failure"
         raise HTTPException(status_code=500, detail=f"frames_to_video.py failed (exit {video_res.returncode}):\n{stderr_detail}")
 
+    frame_count = len(frame_files)
+    video_filename = os.path.basename(video_path)
+
+    # Ship everything in out_dir (frames, video, validation_result.json,
+    # validate.log) to S3 and clear the local copies -- only once every
+    # upload has succeeded, so a bucket/permissions problem never loses
+    # render output that took real Isaac Sim minutes to produce.
+    s3_prefix = f"{scene_id}/"
+    presigned_urls = _upload_dir_to_s3_and_clear(out_dir, S3_RENDERS_BUCKET, s3_prefix)
+
     return ValidateUSDResponse(
         status="SUCCESS",
         scene_id=scene_id,
         usda_path=usda_path,
-        render_files=[f"/renders/{scene_id}/{os.path.basename(p)}" for p in frame_files],
-        video_file=f"/renders/{scene_id}/{os.path.basename(video_path)}",
-        frame_count=len(frame_files),
+        render_files=[presigned_urls[os.path.basename(p)] for p in frame_files],
+        video_file=presigned_urls.get(video_filename),
+        frame_count=frame_count,
         validation_result=validation_result,
+        s3_bucket=S3_RENDERS_BUCKET,
+        s3_prefix=s3_prefix,
     )
 
 

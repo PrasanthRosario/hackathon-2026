@@ -120,10 +120,12 @@ class ValidateUSDResponse(BaseModel):
     status: str
     scene_id: str
     usda_path: str
-    render_files: List[str] = Field(default_factory=list, description="Public /renders/{scene_id}/... URLs for each captured frame")
-    video_file: Optional[str] = Field(None, description="Public /renders/{scene_id}/... URL for the stitched MP4")
+    render_files: List[str] = Field(default_factory=list, description="Presigned S3 GET URLs for each captured frame (local copies are deleted after upload)")
+    video_file: Optional[str] = Field(None, description="Presigned S3 GET URL for the stitched MP4 (local copy is deleted after upload)")
     frame_count: int = 0
     validation_result: Dict[str, Any] = Field(default_factory=dict, description="Contents of validation_result.json: {status, violations, camera_collisions}")
+    s3_bucket: Optional[str] = Field(None, description="S3 bucket the outputs were uploaded to")
+    s3_prefix: Optional[str] = Field(None, description="S3 key prefix (folder) the outputs live under, e.g. '{scene_id}/'")
 
 
 class IngestKitOutputRequest(BaseModel):
