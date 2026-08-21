@@ -90,6 +90,7 @@ class ProposeFixRequest(BaseModel):
     scene_config: SceneConfigSchema
     coverage_flags: List[Dict[str, Any]] = Field(default_factory=list)
     physics_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    collision_flags: List[Dict[str, Any]] = Field(default_factory=list)
     shot_id: Optional[str] = None
 
 
@@ -99,6 +100,30 @@ class ProposeFixResponse(BaseModel):
     fixes: List[Dict[str, Any]] = Field(default_factory=list)
     updated_scene_config: SceneConfigSchema
     model_used: str
+
+
+class ValidateUSDRequest(BaseModel):
+    """
+    Runs a real headless Isaac Sim pass (scenes/standalone_render_and_validate.py)
+    against an arbitrary .usda file already sitting on this machine.
+    """
+    usda_path: str = Field(..., description="Absolute path on this machine to the .usda/.usd file to render + validate")
+    scene_id: Optional[str] = Field(None, description="Identifier for the output folder under renders/; auto-generated from the filename if omitted")
+    camera: str = Field("/World/MainCamera", description="Camera prim path to render/validate through")
+    frames: str = Field("all", description="'all' for every frame in the stage's time range, a comma list like '0,36,72', or '' for start+end only")
+    fps: float = Field(24.0, description="Playback frame rate for the stitched video")
+    renderer: str = Field("RayTracedLighting", description="RayTracedLighting (fast) or PathTracing (slower, needs a higher warmup)")
+    warmup: int = Field(20, description="App update ticks before each capture. RayTracedLighting converges quickly (~20 is plenty); raise substantially (e.g. 150) only for PathTracing")
+
+
+class ValidateUSDResponse(BaseModel):
+    status: str
+    scene_id: str
+    usda_path: str
+    render_files: List[str] = Field(default_factory=list, description="Public /renders/{scene_id}/... URLs for each captured frame")
+    video_file: Optional[str] = Field(None, description="Public /renders/{scene_id}/... URL for the stitched MP4")
+    frame_count: int = 0
+    validation_result: Dict[str, Any] = Field(default_factory=dict, description="Contents of validation_result.json: {status, violations, camera_collisions}")
 
 
 class IngestKitOutputRequest(BaseModel):

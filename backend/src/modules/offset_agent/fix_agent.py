@@ -50,11 +50,22 @@ UNRESOLVED on re-render, which the director will see:
   this fix targets the physically correct cause (added stability) even though the current
   worker build doesn't yet read bracing/mass state back into its stability check, so it may
   still show as unresolved on re-render until that's wired up.
+- `collision_flags` come from a real Isaac Sim PhysX raycast run (frustum-vs-set-geometry,
+  not this worker's placeholder check), with two shapes:
+  - `type: "frustum_off_set"` or `"frustum_escaped"` (fields: frame, corner, prim): a sampled
+    frustum ray hit a prim tagged `is_off_set` (or escaped the far clip entirely) - the camera
+    is seeing past the physical set. Propose `reposition_camera` (aim/move the camera shot_id
+    back toward the set) or `add_wild_wall` (add set geometry to block the gap at `prim`'s
+    position) - whichever is the smaller change. `change_lens` does NOT fix this (narrowing
+    focal length doesn't guarantee the same rays stay on-set) - do not propose it here.
+  - `type: "camera_body_collision"` (fields: frame, colliding_with): the camera rig itself is
+    physically embedded in the listed prim(s). Propose `reposition_camera` to move the shot's
+    start/end position clear of that prim.
 
 FIX TYPE RULES:
-1. `change_lens`: The only reliable fix for a coverage flag from this worker. Increase focal_length_mm (>= 28, prefer 35mm+).
+1. `change_lens`: The only reliable fix for a `coverage_flags` entry from this worker. Increase focal_length_mm (>= 28, prefer 35mm+). Never use it for `collision_flags`.
 2. `add_bracing` / `add_mass`: Use when physics_flags report rigid body tipping or sliding (e.g. LightStandA tipped over). Provide target_id, mass_kg or bracing_type.
-3. `reposition_camera` / `add_wild_wall`: Only propose these if a flag explicitly describes wall-clipping or an off-set void gap by name - not for the focal-length-driven coverage flags this worker produces today.
+3. `reposition_camera` / `add_wild_wall`: The correct fixes for `collision_flags` (frustum-off-set, frustum-escaped, or camera-body-collision) - name the exact frame/prim in the rationale. Also fine for any flag that explicitly describes wall-clipping or an off-set void gap by name. Not for the focal-length-driven `coverage_flags` this worker produces today.
 
 This proposal is shown to a director/DP before anything is applied - they decide whether
 to accept and re-render. Write `summary` for that person: plain language, no prim paths

@@ -188,6 +188,22 @@ def action_run_validation(params):
     physx_query = omni.physx.get_physx_scene_query_interface()
     camera_radius = params.get("camera_radius", 0.15)
 
+    # PhysX scene queries (raycast_closest / overlap_sphere) only return hits
+    # while the timeline is actively playing -- on a stage that was just
+    # opened/rebuilt, PhysX hasn't parsed colliders yet and every query
+    # silently reports "no hit" regardless of what's actually in the scene
+    # (verified: 0/6 hits before playback vs 5/6 after; Kit itself logs
+    # "Physx scene queries can only be performed during simulation" the
+    # first time this is hit). Start playback and let a few frames tick so
+    # queries are actually live before raycasting, then restore whatever
+    # play/pause state the caller had.
+    timeline = omni.timeline.get_timeline_interface()
+    was_playing = timeline.is_playing()
+    if not was_playing:
+        timeline.play()
+        for _ in range(10):
+            omni.kit.app.get_app().update()
+
     start, end = stage.GetStartTimeCode(), stage.GetEndTimeCode()
     num_samples = max(int(end - start) + 1, 1)
     violations = []
@@ -212,6 +228,9 @@ def action_run_validation(params):
                     violations.append({"frame": frame, "corner": corner_index, "prim": str(hit_prim.GetPath())})
             else:
                 violations.append({"frame": frame, "corner": corner_index, "prim": None})
+
+    if not was_playing:
+        timeline.pause()
 
     flagged = bool(violations) or bool(camera_collisions)
     return {

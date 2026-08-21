@@ -185,6 +185,7 @@ export default function App() {
           scene_config: sceneConfig,
           coverage_flags: kitRenderResult.coverage_flags || [],
           physics_flags: kitRenderResult.physics_flags || [],
+          collision_flags: kitRenderResult.collision_flags || [],
         })
       });
 
@@ -305,7 +306,7 @@ export default function App() {
         ...prev,
         {
           role: 'assistant',
-          content: `📥 **Loaded real Kit output from \`${sourceDir}\`.**\n${(data.render_files || []).length} image(s), ${(data.video_files || []).length} video(s).`,
+          content: `📥 **Loaded real Kit output from \`${sourceDir}\`.**\n${(data.render_files || []).length} image(s), ${(data.video_files || []).length} video(s)${(data.collision_flags || []).length ? `, ${(data.collision_flags || []).length} collision flag(s) from validation_result.json` : ''}.`,
           model_used: 'kit_ingest'
         }
       ]);

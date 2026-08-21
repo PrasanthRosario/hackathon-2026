@@ -6,6 +6,8 @@ Scoped cleanly under /offset prefix and root /api aliases.
 import os
 import sys
 import json
+import glob
+import uuid
 import shutil
 import subprocess
 import traceback
@@ -22,6 +24,8 @@ from modules.offset_agent.models import (
     RenderStatusResponse,
     ProposeFixRequest,
     ProposeFixResponse,
+    ValidateUSDRequest,
+    ValidateUSDResponse,
     IngestKitOutputRequest,
 )
 from modules.offset_agent import chains, fix_agent
@@ -30,6 +34,15 @@ router = APIRouter(tags=["Offset Pre-Viz Agent"])
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 VIDEO_EXTS = {".mp4", ".mov", ".webm"}
+
+# scenes/standalone_render_and_validate.py needs Isaac Sim's own Python
+# (./python.sh) -- omni.* is not importable from a plain python3/uv venv.
+# Override with the ISAAC_SIM_PYTHON env var if it lives somewhere else on
+# this box.
+ISAAC_SIM_PYTHON = os.environ.get("ISAAC_SIM_PYTHON", os.path.expanduser("~/IsaacSim/python.sh"))
+_SCENES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "scenes"))
+STANDALONE_VALIDATE_SCRIPT = os.path.join(_SCENES_DIR, "standalone_render_and_validate.py")
+FRAMES_TO_VIDEO_SCRIPT = os.path.join(_SCENES_DIR, "frames_to_video.py")
 
 
 def _resolve_renders_dir() -> str:
@@ -328,6 +341,38 @@ def ingest_kit_output(request: IngestKitOutputRequest):
             detail=f"No image/video files found in '{source_dir}' (looked for {sorted(IMAGE_EXTS | VIDEO_EXTS)}).",
         )
 
+    # If explicit collision_flags weren't passed in the request, look for a
+    # validation_result.json sitting alongside the renders -- this is what
+    # kit_bridge_extension.py's action_run_validation / standalone_render_and_validate.py
+    # write on a real Isaac Sim run: {status, violations: [{frame, corner, prim}],
+    # camera_collisions: [{frame, colliding_with}]}. Flatten it into the same
+    # flat collision_flags shape the UI and fix_agent already expect, so a real
+    # Isaac Sim collision run reaches both the render tab and the fix reasoning
+    # in one ingest call, without requiring the operator to hand-copy JSON.
+    collision_flags = list(request.collision_flags)
+    if not collision_flags:
+        validation_path = os.path.join(source_dir, "validation_result.json")
+        if os.path.exists(validation_path):
+            try:
+                with open(validation_path, "r") as f:
+                    validation_data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                validation_data = {}
+
+            for v in validation_data.get("violations", []):
+                collision_flags.append({
+                    "type": "frustum_off_set" if v.get("prim") else "frustum_escaped",
+                    "frame": v.get("frame"),
+                    "corner": v.get("corner"),
+                    "prim": v.get("prim"),
+                })
+            for c in validation_data.get("camera_collisions", []):
+                collision_flags.append({
+                    "type": "camera_body_collision",
+                    "frame": c.get("frame"),
+                    "colliding_with": c.get("colliding_with"),
+                })
+
     result_data = {
         "status": "SUCCESS",
         "source": "kit_ingested",
@@ -337,13 +382,99 @@ def ingest_kit_output(request: IngestKitOutputRequest):
         "video_files": video_files,
         "coverage_flags": request.coverage_flags,
         "physics_flags": request.physics_flags,
-        "collision_flags": request.collision_flags,
+        "collision_flags": collision_flags,
     }
 
     with open(os.path.join(render_out_dir, "result.json"), "w") as f:
         json.dump(result_data, f, indent=2)
 
     return result_data
+
+
+@router.post("/validate-usd", response_model=ValidateUSDResponse)
+def validate_usd_stage(request: ValidateUSDRequest):
+    """
+    POST /validate-usd
+    Runs scenes/standalone_render_and_validate.py against a .usda file already
+    on this machine via Isaac Sim's own Python (real headless SimulationApp,
+    not the kit_render_worker.py placeholder path): opens the stage, renders
+    the requested frames of --camera through RTX, runs the same PhysX-based
+    shot validator the live bridge uses (action_run_validation), stitches the
+    resulting rgb_*.png sequence into an MP4 via frames_to_video.py, and
+    returns render/video URLs plus the validation result.
+
+    Synchronous -- this blocks for the duration of the Isaac Sim subprocess,
+    which can legitimately take minutes (a cold shader cache on first run
+    alone costs ~100s; see ARCHITECTURE.md). warmup=20 is enough for
+    RayTracedLighting -- only raise it substantially for PathTracing.
+    """
+    usda_path = os.path.abspath(request.usda_path)
+    if not os.path.isfile(usda_path):
+        raise HTTPException(status_code=400, detail=f"usda_path '{usda_path}' does not exist.")
+
+    if not os.path.exists(ISAAC_SIM_PYTHON):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Isaac Sim python.sh not found at '{ISAAC_SIM_PYTHON}'. Set the ISAAC_SIM_PYTHON env var if it lives elsewhere on this box.",
+        )
+    if not os.path.exists(STANDALONE_VALIDATE_SCRIPT):
+        raise HTTPException(status_code=500, detail=f"Missing script: '{STANDALONE_VALIDATE_SCRIPT}'")
+
+    scene_id = request.scene_id or f"{os.path.splitext(os.path.basename(usda_path))[0]}_{uuid.uuid4().hex[:8]}"
+    out_dir = os.path.join(_resolve_renders_dir(), scene_id)
+    os.makedirs(out_dir, exist_ok=True)
+    log_path = os.path.join(out_dir, "validate.log")
+
+    cmd = [
+        ISAAC_SIM_PYTHON, STANDALONE_VALIDATE_SCRIPT,
+        "--usd", usda_path,
+        "--out", out_dir,
+        "--camera", request.camera,
+        "--frames", request.frames,
+        "--warmup", str(request.warmup),
+        "--renderer", request.renderer,
+    ]
+    try:
+        res = subprocess.run(cmd, timeout=900, capture_output=True, text=True)
+        with open(log_path, "w") as f_log:
+            f_log.write(f"=== STDOUT ===\n{res.stdout}\n\n=== STDERR ===\n{res.stderr}\n")
+        if res.returncode != 0:
+            stderr_detail = res.stderr.strip() or res.stdout.strip() or "Unknown worker failure"
+            raise HTTPException(status_code=500, detail=f"standalone_render_and_validate.py failed (exit {res.returncode}):\n{stderr_detail}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail=f"standalone_render_and_validate.py timed out after 900s for '{usda_path}'. See '{log_path}'.")
+
+    validation_json_path = os.path.join(out_dir, "validation_result.json")
+    if not os.path.exists(validation_json_path):
+        raise HTTPException(status_code=500, detail=f"Run completed with exit 0 but '{validation_json_path}' was not written. See '{log_path}'.")
+    with open(validation_json_path, "r") as f:
+        validation_result = json.load(f)
+
+    frame_files = sorted(glob.glob(os.path.join(out_dir, "rgb_*.png")))
+    if not frame_files:
+        raise HTTPException(status_code=500, detail=f"No rendered frames found in '{out_dir}' after a successful run. See '{log_path}'.")
+
+    video_path = os.path.join(out_dir, f"{scene_id}.mp4")
+    video_cmd = [
+        sys.executable, FRAMES_TO_VIDEO_SCRIPT,
+        "--frames_dir", out_dir,
+        "--fps", str(request.fps),
+        "--out", video_path,
+    ]
+    video_res = subprocess.run(video_cmd, timeout=120, capture_output=True, text=True)
+    if video_res.returncode != 0 or not os.path.exists(video_path):
+        stderr_detail = video_res.stderr.strip() or video_res.stdout.strip() or "Unknown ffmpeg failure"
+        raise HTTPException(status_code=500, detail=f"frames_to_video.py failed (exit {video_res.returncode}):\n{stderr_detail}")
+
+    return ValidateUSDResponse(
+        status="SUCCESS",
+        scene_id=scene_id,
+        usda_path=usda_path,
+        render_files=[f"/renders/{scene_id}/{os.path.basename(p)}" for p in frame_files],
+        video_file=f"/renders/{scene_id}/{os.path.basename(video_path)}",
+        frame_count=len(frame_files),
+        validation_result=validation_result,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +554,7 @@ def propose_fix(request: ProposeFixRequest):
         "scene_config": request.scene_config.model_dump(),
         "coverage_flags": request.coverage_flags,
         "physics_flags": request.physics_flags,
+        "collision_flags": request.collision_flags,
     }
 
     try:

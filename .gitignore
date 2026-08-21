@@ -4,6 +4,10 @@
 .env.*
 !.env.example
 
+# Backend runtime artifacts (scripts/backend.sh) -- backend.log already
+# covered by the *.log rule above
+backend/.backend.pid
+
 # Python
 __pycache__/
 *.py[cod]
