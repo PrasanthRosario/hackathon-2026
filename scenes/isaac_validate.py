@@ -72,7 +72,11 @@ def on_update(event):
     if not timeline.is_playing():
         return
 
-    current_frame = timeline.get_current_time() * stage.GetTimeCodesPerSecond()
+    stage = omni.usd.get_context().get_stage()
+    if not stage:
+        return
+
+    current_frame = timeline.get_current_time() * timeline.get_time_codes_per_second()
     results = check_shot(current_frame)
     flagged_corners = [r for r in results if r["off_set"]]
 

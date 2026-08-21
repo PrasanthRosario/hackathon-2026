@@ -236,6 +236,8 @@ def check_bridge(event):
         except (json.JSONDecodeError, OSError):
             continue
 
+        print(f"[bridge] picked up {fname}: action={cmd.get('action')} params={cmd.get('params', {})}")
+
         action_fn = ACTIONS.get(cmd["action"])
         if action_fn:
             try:
@@ -244,6 +246,8 @@ def check_bridge(event):
                 result = {"status": "error", "message": str(e)}
         else:
             result = {"status": "error", "message": f"unknown action: {cmd['action']}"}
+
+        print(f"[bridge] result for {cmd.get('id')}: {result}")
 
         with open(os.path.join(RESULTS_DIR, f"{cmd['id']}.json"), "w") as f:
             json.dump(result, f)
