@@ -50,7 +50,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     current_config: Optional[SceneConfigSchema] = None
-    model_preference: Optional[str] = None  # 'auto' | 'haiku' | 'sonnet' | 'opus'
+    model_preference: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -72,3 +72,14 @@ class GenerateUSDResponse(BaseModel):
     usd_path: str
     prim_count: int
     message: str
+
+
+class RenderRequest(BaseModel):
+    usd_content: str = Field(..., description="USDA raw text string content")
+    scene_id: str = Field(..., description="Unique scene identifier")
+
+
+class RenderStatusResponse(BaseModel):
+    status: str  # "pending" | "done" | "failed"
+    scene_id: str
+    message: Optional[str] = None

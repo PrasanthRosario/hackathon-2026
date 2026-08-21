@@ -1,10 +1,12 @@
 """
 router.py - APIRouter for Offset Agent module.
-Scoped cleanly under /offset prefix so it will never conflict with other backend modules.
+Scoped cleanly under /offset prefix and root /api aliases.
 """
 
 import os
+import sys
 import json
+import subprocess
 import traceback
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Body
@@ -15,6 +17,8 @@ from modules.offset_agent.models import (
     ChatResponse,
     GenerateUSDRequest,
     GenerateUSDResponse,
+    RenderRequest,
+    RenderStatusResponse,
 )
 from modules.offset_agent import chains
 
@@ -84,7 +88,7 @@ def generate_usd_stage(request: GenerateUSDRequest):
 
         prim_count = 0
         try:
-            from pxr import Usd, UsdGeom, UsdPhysics, Gf, Sdf
+            from pxr import Usd, UsdGeom, UsdPhysics, Gf
             
             stage = Usd.Stage.CreateNew(out_path)
             UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
@@ -147,6 +151,125 @@ def generate_usd_stage(request: GenerateUSDRequest):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"USD generation failed: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# COMPONENT 2: FASTAPI RENDER ENDPOINT & STATUS POLLING
+# ---------------------------------------------------------------------------
+
+@router.post("/render")
+def render_stage(request: RenderRequest):
+    """
+    POST /render
+    1. Writes usd_content to /home/ubuntu/scenes/{scene_id}.usda (or local fallback scenes/{scene_id}.usda).
+    2. Invokes kit_render_worker.py via subprocess (timeout=180s).
+    3. Returns result.json with static render URLs (/renders/{scene_id}/...).
+    4. On failure or timeout, returns HTTP 500 with exact subprocess stderr.
+    """
+    scene_id = request.scene_id
+    
+    # 1. Determine paths (EC2 ubuntu path preferred, repo root fallback)
+    ubuntu_scenes = "/home/ubuntu/scenes"
+    if os.path.exists(ubuntu_scenes) or os.access("/home/ubuntu", os.W_OK):
+        scenes_dir = ubuntu_scenes
+    else:
+        scenes_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "scenes"))
+        
+    os.makedirs(scenes_dir, exist_ok=True)
+    usd_path = os.path.join(scenes_dir, f"{scene_id}.usda")
+
+    ubuntu_renders = "/home/ubuntu/renders"
+    if os.path.exists(ubuntu_renders) or os.access("/home/ubuntu", os.W_OK):
+        renders_dir = ubuntu_renders
+    else:
+        renders_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "renders"))
+
+    render_out_dir = os.path.join(renders_dir, scene_id)
+    os.makedirs(render_out_dir, exist_ok=True)
+
+    # 2. Save USDA content
+    try:
+        with open(usd_path, "w") as f:
+            f.write(request.usd_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write stage file to '{usd_path}': {str(e)}")
+
+    # 3. Locate kit_render_worker.py script
+    worker_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "kit_render_worker.py"))
+    if not os.path.exists(worker_script):
+        raise HTTPException(status_code=500, detail=f"Render worker script missing at '{worker_script}'")
+
+    cmd = [sys.executable, worker_script, "--usd", usd_path, "--out", render_out_dir]
+    log_path = os.path.join(render_out_dir, "render.log")
+
+    # 4. Execute subprocess with 180s timeout
+    try:
+        res = subprocess.run(cmd, timeout=180, capture_output=True, text=True)
+        
+        # Log stdout/stderr to render.log
+        with open(log_path, "w") as f_log:
+            f_log.write(f"=== STDOUT ===\n{res.stdout}\n\n=== STDERR ===\n{res.stderr}\n")
+
+        if res.returncode != 0:
+            stderr_detail = res.stderr.strip() or res.stdout.strip() or "Unknown worker failure"
+            raise HTTPException(status_code=500, detail=f"Kit Render Worker Error (Exit {res.returncode}):\n{stderr_detail}")
+
+        # 5. Read result.json
+        result_json_file = os.path.join(render_out_dir, "result.json")
+        if not os.path.exists(result_json_file):
+            raise HTTPException(status_code=500, detail=f"Result file missing: worker completed with code 0 but '{result_json_file}' was not created.\nStderr:\n{res.stderr}")
+
+        with open(result_json_file, "r") as f:
+            result_data = json.load(f)
+
+        # 6. Rewrite render file paths to public static /renders/{scene_id}/... URLs
+        public_renders = []
+        for r_file in result_data.get("render_files", []):
+            fname = os.path.basename(r_file)
+            public_renders.append(f"/renders/{scene_id}/{fname}")
+
+        result_data["render_files"] = public_renders
+        result_data["scene_id"] = scene_id
+        return result_data
+
+    except subprocess.TimeoutExpired as te:
+        with open(log_path, "a") as f_log:
+            f_log.write(f"\n=== TIMEOUT EXPIRED (180s) ===\n")
+        raise HTTPException(status_code=500, detail=f"Kit Render Worker timed out after 180 seconds on scene '{scene_id}'.")
+
+
+@router.get("/render/{scene_id}/status", response_model=RenderStatusResponse)
+def get_render_status(scene_id: str):
+    """
+    GET /render/{scene_id}/status
+    Polls status for kit_render_worker execution:
+      - "done" if result.json exists
+      - "failed" if log indicates non-zero exit or error
+      - "pending" if render is still in flight
+    """
+    ubuntu_renders = "/home/ubuntu/renders"
+    if os.path.exists(ubuntu_renders):
+        renders_dir = ubuntu_renders
+    else:
+        renders_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "renders"))
+
+    render_out_dir = os.path.join(renders_dir, scene_id)
+    result_json = os.path.join(render_out_dir, "result.json")
+    log_file = os.path.join(render_out_dir, "render.log")
+
+    if os.path.exists(result_json):
+        return RenderStatusResponse(status="done", scene_id=scene_id, message="Render and physics simulation completed.")
+
+    if os.path.exists(log_file):
+        with open(log_file, "r") as f:
+            log_content = f.read()
+            if "ERROR" in log_content or "TIMEOUT EXPIRED" in log_content:
+                return RenderStatusResponse(status="failed", scene_id=scene_id, message="Render worker failed. See log for details.")
+
+    if os.path.exists(render_out_dir):
+        return RenderStatusResponse(status="pending", scene_id=scene_id, message="Kit application worker is starting/rendering stage.")
+
+    return RenderStatusResponse(status="pending", scene_id=scene_id, message="Scene render request queued.")
 
 
 # ---------------------------------------------------------------------------

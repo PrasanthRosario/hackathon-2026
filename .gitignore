@@ -44,12 +44,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Generated USD files & scenes output
 scenes/*.usda
 scenes/*.usd
 scenes/*.usdc
 scenes/*.json
 !scenes/.gitkeep
+
+# Render outputs
+renders/
 
 # IDEs & System files
 .DS_Store
