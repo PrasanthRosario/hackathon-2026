@@ -43,13 +43,26 @@ def call_kit(action, params=None, timeout=15.0):
 
 # --- Example: what your agent's tool-calling loop does with this -----
 if __name__ == "__main__":
-    # Called when the LLM decides the director wants the camera moved
+    # GOOD SHOT: camera on the desk, framed on-set. Small move, subtle
+    # on screen -- useful for confirming OK stays OK, not for a demo.
+    print("=== good shot: framed on desk ===")
     result = call_kit("move_camera", {
-        "eye": [0, -1.2, 1.35],
+        "eye": [0, -1.05, 1.35],
         "target": [0, 0.6, 1.15],
     })
     print("move_camera result:", result)
+    result = call_kit("run_validation")
+    print("run_validation result:", result)
 
-    # Called right after, to check the new shot
+    # BAD SHOT: same camera, swung ~180 degrees to point through the
+    # off-set door gap into the backstage void instead of the desk.
+    # This is a big, unmistakable reframe on screen (not a nudge), and
+    # it flips run_validation from OK to FLAGGED -- good for a demo.
+    print("=== bad shot: swung into backstage void ===")
+    result = call_kit("move_camera", {
+        "eye": [0, -1.05, 1.35],
+        "target": [5.0, 0, 1.35],
+    })
+    print("move_camera result:", result)
     result = call_kit("run_validation")
     print("run_validation result:", result)

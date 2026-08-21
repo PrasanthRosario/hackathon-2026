@@ -30,8 +30,13 @@ physx_query = omni.physx.get_physx_scene_query_interface()
 _run_state = {"reported_end": False, "violations": []}
 
 
-def get_frustum_corner_dirs(cam_schema):
-    """4 rays, in camera-local space, through the far-plane corners."""
+def get_frustum_sample_dirs(cam_schema, grid=5):
+    """Rays in camera-local space sampled across the whole frame (a
+    grid x grid lattice from -1..1 in both axes, including the
+    center), not just the 4 far-plane corners. A gap in the set
+    narrower than the corner-to-corner spread would never register
+    against the old 4-corner-only sampling; a dense grid can't miss
+    it that way."""
     focal = cam_schema.GetFocalLengthAttr().Get()
     h_ap = cam_schema.GetHorizontalApertureAttr().Get()
     v_ap = cam_schema.GetVerticalApertureAttr().Get()
@@ -39,8 +44,9 @@ def get_frustum_corner_dirs(cam_schema):
     half_w = far * (h_ap / 2.0) / focal
     half_h = far * (v_ap / 2.0) / focal
     dirs = []
-    for sx in (-1, 1):
-        for sy in (-1, 1):
+    steps = [-1.0 + 2.0 * i / (grid - 1) for i in range(grid)]
+    for sx in steps:
+        for sy in steps:
             local_pt = Gf.Vec3d(sx * half_w, sy * half_h, -far)
             dirs.append(local_pt.GetNormalized())
     return dirs, far
@@ -49,7 +55,7 @@ def get_frustum_corner_dirs(cam_schema):
 def check_shot(current_frame):
     world_m = xformable.ComputeLocalToWorldTransform(Usd.TimeCode(current_frame))
     eye = world_m.ExtractTranslation()
-    corner_dirs, far = get_frustum_corner_dirs(cam_schema)
+    corner_dirs, far = get_frustum_sample_dirs(cam_schema)
 
     results = []
     for corner_index, local_dir in enumerate(corner_dirs):
@@ -72,7 +78,11 @@ def on_update(event):
     if not timeline.is_playing():
         return
 
-    current_frame = timeline.get_current_time() * stage.GetTimeCodesPerSecond()
+    stage = omni.usd.get_context().get_stage()
+    if not stage:
+        return
+
+    current_frame = timeline.get_current_time() * timeline.get_time_codes_per_second()
     results = check_shot(current_frame)
     flagged_corners = [r for r in results if r["off_set"]]
 

@@ -53,7 +53,17 @@ def look_at_matrix(eye, target, world_up=(0, 0, 1)):
 def point_camera_at(camera_prim, eye, target, world_up=(0, 0, 1)):
     xformable = UsdGeom.Xformable(camera_prim)
     xformable.ClearXformOpOrder()
-    xformable.AddTransformOp().Set(look_at_matrix(eye, target, world_up))
+    op = xformable.AddTransformOp()
+    attr = op.GetAttr()
+    # A prior animate_camera_move() call may have left baked time
+    # samples on this same attribute. A plain Set() below only writes
+    # a *default* value -- while the timeline is playing within an
+    # animated range, USD prefers the time-sampled value over the
+    # default, so the old animation would silently keep winning.
+    # Wipe any leftover samples so this static look-at actually sticks.
+    for t in attr.GetTimeSamples():
+        attr.ClearAtTime(Usd.TimeCode(t))
+    op.Set(look_at_matrix(eye, target, world_up))
 
 
 def animate_camera_move(stage, camera_prim, keyframes, fps=24):
@@ -69,7 +79,13 @@ def animate_camera_move(stage, camera_prim, keyframes, fps=24):
         op.Set(look_at_matrix(eye, target), Usd.TimeCode(t_sec * fps))
 
 
-def get_frustum_corner_dirs(cam_schema):
+def get_frustum_sample_dirs(cam_schema, grid=5):
+    """Rays in camera-local space sampled across the whole frame (a
+    grid x grid lattice from -1..1 in both axes, including the
+    center), not just the 4 far-plane corners. A gap in the set
+    narrower than the corner-to-corner spread would never register
+    against the old 4-corner-only sampling; a dense grid can't miss
+    it that way."""
     focal = cam_schema.GetFocalLengthAttr().Get()
     h_ap = cam_schema.GetHorizontalApertureAttr().Get()
     v_ap = cam_schema.GetVerticalApertureAttr().Get()
@@ -77,8 +93,9 @@ def get_frustum_corner_dirs(cam_schema):
     half_w = far * (h_ap / 2.0) / focal
     half_h = far * (v_ap / 2.0) / focal
     dirs = []
-    for sx in (-1, 1):
-        for sy in (-1, 1):
+    steps = [-1.0 + 2.0 * i / (grid - 1) for i in range(grid)]
+    for sx in steps:
+        for sy in steps:
             local_pt = Gf.Vec3d(sx * half_w, sy * half_h, -far)
             dirs.append(local_pt.GetNormalized())
     return dirs, far
@@ -200,7 +217,7 @@ def action_run_validation(params):
         frame = start + i
         world_m = xformable.ComputeLocalToWorldTransform(Usd.TimeCode(frame))
         eye = world_m.ExtractTranslation()
-        corner_dirs, far = get_frustum_corner_dirs(cam_schema)
+        corner_dirs, far = get_frustum_sample_dirs(cam_schema)
         for corner_index, local_dir in enumerate(corner_dirs):
             world_dir = world_m.TransformDir(local_dir).GetNormalized()
             hit = physx_query.raycast_closest(tuple(eye), tuple(world_dir), far)
@@ -236,6 +253,8 @@ def check_bridge(event):
         except (json.JSONDecodeError, OSError):
             continue
 
+        print(f"[bridge] picked up {fname}: action={cmd.get('action')} params={cmd.get('params', {})}")
+
         action_fn = ACTIONS.get(cmd["action"])
         if action_fn:
             try:
@@ -244,6 +263,8 @@ def check_bridge(event):
                 result = {"status": "error", "message": str(e)}
         else:
             result = {"status": "error", "message": f"unknown action: {cmd['action']}"}
+
+        print(f"[bridge] result for {cmd.get('id')}: {result}")
 
         with open(os.path.join(RESULTS_DIR, f"{cmd['id']}.json"), "w") as f:
             json.dump(result, f)
