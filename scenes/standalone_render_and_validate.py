@@ -13,11 +13,20 @@ copy-paste. Run with Isaac Sim's own interpreter:
 Opens the given .usda, runs the same run_validation check the bridge
 uses (imported directly from kit_bridge_extension.py -- no duplicated
 scene-building/validation logic), and renders the requested frames
-through MainCamera to PNG files using RTX. With --renderer PathTracing
-it also applies the realism settings discussed for the pitch: OptiX
-denoiser, higher sample accumulation, ACES tonemapping, and a warm-up
-loop before each capture so the path tracer actually converges instead
-of grabbing a noisy first sample.
+through MainCamera to PNG files using RTX (via omni.replicator.core,
+the documented path for headless/offline capture -- it actually blocks
+until each frame is rendered and written, unlike the viewport capture
+utility which is async with no reliable "done" signal in headless
+mode). With --renderer PathTracing it also applies the realism
+settings discussed for the pitch: OptiX denoiser, higher sample
+accumulation, ACES tonemapping, and a warm-up loop before each capture
+so the path tracer actually converges instead of grabbing a noisy
+first sample.
+
+Output PNGs are named rgb_0000.png, rgb_0001.png, ... in capture
+order (BasicWriter's own numbering, not the USD time code) -- with
+--frames all this is already a contiguous sequence, ready for
+frames_to_video.py as-is.
 
 Output lands in --out on THIS machine (the Isaac Sim host, e.g. your
 AWS instance) -- this script has no networking of its own. To get the
@@ -70,7 +79,7 @@ def main():
     import carb
     import omni.usd
     import omni.timeline
-    from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file
+    import omni.replicator.core as rep
 
     settings = carb.settings.get_settings()
     if args.renderer == "PathTracing":
@@ -113,20 +122,29 @@ def main():
         frames = [start, end]
 
     os.makedirs(args.out, exist_ok=True)
-    viewport = get_active_viewport()
+
+    # omni.replicator.core is the documented path for headless/offline
+    # capture in standalone scripts -- unlike the viewport capture
+    # utility (which is async with no reliable synchronous "done"
+    # signal in headless mode, and turned out to silently no-op here),
+    # rep.orchestrator.step() + wait_until_complete() actually blocks
+    # until the frame is rendered AND written to disk.
+    render_product = rep.create.render_product(args.camera, (args.width, args.height))
+    writer = rep.WriterRegistry.get("BasicWriter")
+    writer.initialize(output_dir=args.out, rgb=True)
+    writer.attach([render_product])
 
     for frame in frames:
         timeline.set_current_time(frame / fps)
         for _ in range(args.warmup):
             simulation_app.update()
 
-        out_path = os.path.join(args.out, f"frame_{int(frame):04d}.png")
-        capture_viewport_to_file(viewport, out_path)
-        # capture is queued, not synchronous -- a few more ticks let it
-        # actually flush to disk before we move on or exit.
-        for _ in range(5):
-            simulation_app.update()
-        print(f"saved {out_path}")
+        rep.orchestrator.step(rt_subframes=1)
+        rep.orchestrator.wait_until_complete()
+        print(f"captured frame {frame:.0f} (see {args.out}/rgb_*.png -- BasicWriter numbers files by capture order, not by time code)")
+
+    writer.detach()
+    render_product.destroy()
 
     validation_result = bridge.action_run_validation({"camera_path": args.camera})
     print("run_validation:", validation_result)
