@@ -53,7 +53,17 @@ def look_at_matrix(eye, target, world_up=(0, 0, 1)):
 def point_camera_at(camera_prim, eye, target, world_up=(0, 0, 1)):
     xformable = UsdGeom.Xformable(camera_prim)
     xformable.ClearXformOpOrder()
-    xformable.AddTransformOp().Set(look_at_matrix(eye, target, world_up))
+    op = xformable.AddTransformOp()
+    attr = op.GetAttr()
+    # A prior animate_camera_move() call may have left baked time
+    # samples on this same attribute. A plain Set() below only writes
+    # a *default* value -- while the timeline is playing within an
+    # animated range, USD prefers the time-sampled value over the
+    # default, so the old animation would silently keep winning.
+    # Wipe any leftover samples so this static look-at actually sticks.
+    for t in attr.GetTimeSamples():
+        attr.ClearAtTime(Usd.TimeCode(t))
+    op.Set(look_at_matrix(eye, target, world_up))
 
 
 def animate_camera_move(stage, camera_prim, keyframes, fps=24):
