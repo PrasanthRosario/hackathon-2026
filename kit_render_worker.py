@@ -12,12 +12,33 @@ Executes:
 Exit code 0 on success, non-zero with specific stderr message on failure.
 """
 
-import sys
 import os
-import math
+import sys
 import json
 import argparse
-import traceback
+
+# Optional Omniverse Kit SDK imports (available inside Omniverse Kit runtime)
+try:
+    import omni.usd  # type: ignore
+    import omni.replicator.core as rep  # type: ignore
+    HAS_OMNI = True
+except ImportError:
+    HAS_OMNI = False
+
+# Pixar USD Core imports
+try:
+    from pxr import Usd, UsdGeom, Gf
+    HAS_PXR = True
+except ImportError:
+    HAS_PXR = False
+
+# Pillow for fallback viewport capture rendering
+try:
+    from PIL import Image, ImageDraw
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Omniverse Kit Render & Physics Worker")
@@ -39,26 +60,24 @@ def main():
 
     # 1. Load USD Stage
     stage = None
-    try:
-        # Try Omniverse Kit SDK context first if Kit runtime is active
+    if HAS_OMNI:
         try:
-            import omni.usd
             context = omni.usd.get_context()
             context.open_stage(usd_path)
             stage = context.get_stage()
-        except Exception:
-            # Standalone USD Core fallback
-            from pxr import Usd
+        except Exception as e:
+            sys.stderr.write(f"WARNING [kit_render_worker]: omni.usd open_stage failed: {e}. Falling back to pxr.Usd.\n")
+
+    if stage is None and HAS_PXR:
+        try:
             stage = Usd.Stage.Open(usd_path)
-
-        if not stage:
-            sys.stderr.write(f"ERROR [kit_render_worker]: Failed to open USD stage '{usd_path}'. Stage pointer is null.\n")
+        except Exception as e:
+            sys.stderr.write(f"ERROR [kit_render_worker]: Failed to parse USD stage '{usd_path}': {str(e)}\n")
             sys.exit(2)
-    except Exception as e:
-        sys.stderr.write(f"ERROR [kit_render_worker]: Failed to parse USD stage '{usd_path}': {str(e)}\n")
-        sys.exit(2)
 
-    from pxr import Usd, UsdGeom, Gf
+    if stage is None:
+        sys.stderr.write(f"ERROR [kit_render_worker]: Unable to load stage '{usd_path}'. Neither omni.usd nor pxr.Usd is available.\n")
+        sys.exit(2)
 
     render_files = []
     coverage_flags = []
@@ -80,9 +99,7 @@ def main():
 
     # Render each camera
     try:
-        # Try Omniverse Replicator core if available in Kit SDK environment
-        try:
-            import omni.replicator.core as rep
+        if HAS_OMNI:
             for cam_prim in cameras:
                 cam_name = cam_prim.GetName()
                 out_png = os.path.join(out_dir, f"render_{cam_name}.png")
@@ -95,18 +112,13 @@ def main():
                 rep.orchestrator.step()
                 
                 render_files.append(out_png)
-        except Exception:
+        else:
             # Fallback rendering capture using USD bounding box projection / Image writer
-            try:
-                from PIL import Image, ImageDraw, ImageFont
-            except ImportError:
-                Image = None
-
             for cam_prim in cameras:
                 cam_name = cam_prim.GetName()
                 out_png = os.path.join(out_dir, f"render_{cam_name}.png")
                 
-                if Image:
+                if HAS_PIL:
                     img = Image.new("RGB", (1280, 720), color=(15, 23, 42))
                     draw = ImageDraw.Draw(img)
                     
@@ -144,7 +156,6 @@ def main():
             # Check light stands, rigs, or props for physical stability
             if "Rig" in path_str or "LightStand" in path_str or "Prop" in path_str:
                 pos = xc.GetLocalToWorldTransform(prim).ExtractTranslation()
-                rot_matrix = xc.GetLocalToWorldTransform(prim).ExtractRotationMatrix()
                 
                 # Check for planted failure conditions (e.g. LightStand tipping or clipping)
                 if "LightStandA" in path_str or pos[2] > 2.5:
