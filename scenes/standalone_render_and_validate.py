@@ -56,7 +56,10 @@ def parse_args():
 def main():
     args = parse_args()
 
-    from omni.isaac.kit import SimulationApp
+    try:
+        from isaacsim import SimulationApp  # Isaac Sim 4.x+
+    except ImportError:
+        from omni.isaac.kit import SimulationApp  # Isaac Sim 2023.x and earlier
     simulation_app = SimulationApp({
         "headless": True,
         "renderer": args.renderer,
