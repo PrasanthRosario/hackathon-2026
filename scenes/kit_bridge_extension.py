@@ -147,21 +147,51 @@ def action_move_camera(params):
     return {"status": "ok"}
 
 
+def check_camera_body_collision(physx_query, eye, radius=0.15):
+    """Sphere-overlap query at the camera's own position -- catches the
+    rig itself being jammed inside a wall/desk/prop, which the outward
+    frustum rays below can never detect (they start FROM the camera,
+    so they can't see that the camera's own body is embedded in
+    something). `radius` stands in for the physical bulk of a real
+    camera + rig; tune it to whatever's realistic for your setup."""
+    hit_paths = []
+
+    def report_hit(hit):
+        hit_paths.append(str(hit.rigid_body))
+        return True  # keep collecting all overlaps, not just the first
+
+    try:
+        physx_query.overlap_sphere(radius, tuple(eye), report_hit, False)
+    except TypeError:
+        # Some Kit/PhysX versions take (pos, radius, ...) instead --
+        # retry with the arguments swapped before giving up.
+        physx_query.overlap_sphere(tuple(eye), radius, report_hit, False)
+
+    return hit_paths
+
+
 def action_run_validation(params):
     stage = omni.usd.get_context().get_stage()
     camera_prim = stage.GetPrimAtPath(params.get("camera_path", "/World/MainCamera"))
     cam_schema = UsdGeom.Camera(camera_prim)
     xformable = UsdGeom.Xformable(camera_prim)
     physx_query = omni.physx.get_physx_scene_query_interface()
+    camera_radius = params.get("camera_radius", 0.15)
 
     start, end = stage.GetStartTimeCode(), stage.GetEndTimeCode()
     num_samples = max(int(end - start) + 1, 1)
     violations = []
+    camera_collisions = []
 
     for i in range(num_samples):
         frame = start + i
         world_m = xformable.ComputeLocalToWorldTransform(Usd.TimeCode(frame))
         eye = world_m.ExtractTranslation()
+
+        colliding_with = check_camera_body_collision(physx_query, eye, camera_radius)
+        if colliding_with:
+            camera_collisions.append({"frame": frame, "colliding_with": colliding_with})
+
         corner_dirs, far = get_frustum_sample_dirs(cam_schema)
         for corner_index, local_dir in enumerate(corner_dirs):
             world_dir = world_m.TransformDir(local_dir).GetNormalized()
@@ -173,7 +203,12 @@ def action_run_validation(params):
             else:
                 violations.append({"frame": frame, "corner": corner_index, "prim": None})
 
-    return {"status": "FLAGGED" if violations else "OK", "violations": violations}
+    flagged = bool(violations) or bool(camera_collisions)
+    return {
+        "status": "FLAGGED" if flagged else "OK",
+        "violations": violations,
+        "camera_collisions": camera_collisions,
+    }
 
 
 ACTIONS = {

@@ -52,10 +52,34 @@ def get_frustum_sample_dirs(cam_schema, grid=5):
     return dirs, far
 
 
+def check_camera_body_collision(eye, radius=0.15):
+    """Sphere-overlap query at the camera's own position -- catches the
+    rig itself being jammed inside a wall/desk/prop, which the outward
+    frustum rays below can never detect on their own (they start FROM
+    the camera, so they can't see the camera's body is embedded in
+    something). `radius` stands in for a real camera + rig's bulk."""
+    hit_paths = []
+
+    def report_hit(hit):
+        hit_paths.append(str(hit.rigid_body))
+        return True  # keep collecting all overlaps, not just the first
+
+    try:
+        physx_query.overlap_sphere(radius, tuple(eye), report_hit, False)
+    except TypeError:
+        # Some Kit/PhysX versions take (pos, radius, ...) instead --
+        # retry with the arguments swapped before giving up.
+        physx_query.overlap_sphere(tuple(eye), radius, report_hit, False)
+
+    return hit_paths
+
+
 def check_shot(current_frame):
     world_m = xformable.ComputeLocalToWorldTransform(Usd.TimeCode(current_frame))
     eye = world_m.ExtractTranslation()
     corner_dirs, far = get_frustum_sample_dirs(cam_schema)
+
+    colliding_with = check_camera_body_collision(eye)
 
     results = []
     for corner_index, local_dir in enumerate(corner_dirs):
@@ -71,7 +95,7 @@ def check_shot(current_frame):
         else:
             # ray escaped without hitting anything within the far clip -- also a flag
             results.append({"corner": corner_index, "hit": False, "off_set": True, "prim": None})
-    return results
+    return results, colliding_with
 
 
 def on_update(event):
@@ -83,14 +107,19 @@ def on_update(event):
         return
 
     current_frame = timeline.get_current_time() * timeline.get_time_codes_per_second()
-    results = check_shot(current_frame)
+    results, colliding_with = check_shot(current_frame)
     flagged_corners = [r for r in results if r["off_set"]]
+
+    if colliding_with:
+        print(f"Frame {current_frame:.0f}: FLAG -- camera body colliding with {colliding_with}")
+        _run_state["violations"].append((round(current_frame, 1), [{"camera_collision": colliding_with}]))
+        _run_state["reported_end"] = False
 
     if flagged_corners:
         print(f"Frame {current_frame:.0f}: FLAG -- {flagged_corners}")
         _run_state["violations"].append((round(current_frame, 1), flagged_corners))
         _run_state["reported_end"] = False
-    else:
+    elif not colliding_with:
         print(f"Frame {current_frame:.0f}: OK")
 
     # Print one summary the moment playback reaches the end of the timeline.

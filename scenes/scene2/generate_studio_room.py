@@ -102,6 +102,21 @@ def point_camera_at(camera_prim, eye, target):
     xf.AddTransformOp().Set(look_at_matrix(eye, target))
 
 
+def animate_camera_move(stage, camera_prim, keyframes, fps=24):
+    """keyframes: list of (time_seconds, eye, target) tuples. Bakes a
+    real USD time-sampled move so there's more than one frame for
+    per-frame shot validation to actually check."""
+    stage.SetTimeCodesPerSecond(fps)
+    stage.SetStartTimeCode(keyframes[0][0] * fps)
+    stage.SetEndTimeCode(keyframes[-1][0] * fps)
+
+    xf = UsdGeom.Xformable(camera_prim)
+    xf.ClearXformOpOrder()
+    op = xf.AddTransformOp()
+    for t_sec, eye, target in keyframes:
+        op.Set(look_at_matrix(eye, target), Usd.TimeCode(t_sec * fps))
+
+
 # =======================================================================
 # Mannequin stand-in for the host -- a bounding-shape blockout, not a
 # realistic figure. Good enough for frustum/framing validation and for
@@ -135,7 +150,7 @@ def build_mannequin(stage, parent, seat_pos, skin_mat, shirt_mat):
 # Build
 # =======================================================================
 
-def build_room(stage_path="studio_room.usda"):
+def build_room(stage_path="studio_room.usda", bad_shot=False):
     stage = Usd.Stage.CreateNew(stage_path)
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
     UsdGeom.SetStageMetersPerUnit(stage, 1.0)
@@ -281,9 +296,21 @@ def build_room(stage_path="studio_room.usda"):
     camera.CreateHorizontalApertureAttr(36.0)
     camera.CreateVerticalApertureAttr(24.0)
     camera.CreateClippingRangeAttr(Gf.Vec2f(0.1, 8.0))
-    eye = (0, seat_y - 1.3, 1.4)
-    target = (0, seat_y, seat_h + 0.55)  # head height of the seated mannequin
-    point_camera_at(camera.GetPrim(), eye, target)
+    if bad_shot:
+        # Same room, same camera path -- but the dolly ends up aimed
+        # through the off-set door gap into the backstage void instead
+        # of the host, so run_validation should flip to FLAGGED.
+        void_target = (room_w / 2 + 2.0, 0, room_h / 2)
+        animate_camera_move(stage, camera.GetPrim(), [
+            (0.0, (0, seat_y - 1.9, 1.6), (0, seat_y, seat_h + 0.55)),  # starts on the host
+            (3.0, (0, seat_y - 1.3, 1.4), void_target),                  # swings into the void
+        ])
+    else:
+        head_target = (0, seat_y, seat_h + 0.55)  # head height of the seated mannequin
+        animate_camera_move(stage, camera.GetPrim(), [
+            (0.0, (0, seat_y - 1.9, 1.6), head_target),   # wide establishing
+            (3.0, (0, seat_y - 1.3, 1.4), head_target),   # dolly-in to host
+        ])
 
     stage.GetRootLayer().Save()
     print(f"Saved {stage_path}")
@@ -291,7 +318,8 @@ def build_room(stage_path="studio_room.usda"):
 
 
 if __name__ == "__main__":
-    build_room()
+    build_room("studio_room.usda", bad_shot=False)
+    build_room("studio_room_bad_shot.usda", bad_shot=True)
 
 # -----------------------------------------------------------------------
 # To get an actually realistic person instead of this mannequin:
