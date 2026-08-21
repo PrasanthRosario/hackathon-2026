@@ -19,8 +19,10 @@ from modules.offset_agent.models import (
     GenerateUSDResponse,
     RenderRequest,
     RenderStatusResponse,
+    ProposeFixRequest,
+    ProposeFixResponse,
 )
-from modules.offset_agent import chains
+from modules.offset_agent import chains, fix_agent
 
 router = APIRouter(tags=["Offset Pre-Viz Agent"])
 
@@ -141,11 +143,17 @@ def generate_usd_stage(request: GenerateUSDRequest):
                 json.dump(request.scene_config.model_dump(), f, indent=2)
             prim_count = len(request.scene_config.walls) + len(request.scene_config.shots) + 1
 
+        usd_content = None
+        if os.path.exists(out_path):
+            with open(out_path, "r") as f:
+                usd_content = f.read()
+
         return GenerateUSDResponse(
             status="SUCCESS",
             usd_path=out_path,
             prim_count=prim_count,
             message=f"USD Stage generated successfully with {len(request.scene_config.walls)} walls and {len(request.scene_config.shots)} shot cameras.",
+            usd_content=usd_content,
         )
 
     except Exception as e:
@@ -334,14 +342,38 @@ def stub_check_physics(scene_config: SceneConfigSchema):
     }
 
 
-@router.post("/propose-fix")
-def stub_propose_fix(payload: Dict[str, Any] = Body(...)):
-    current_config = payload.get("current_config", {})
-    issues = payload.get("issues", [])
-    updated_config, explanation = chains.run_sonnet_fix_proposal(current_config, issues)
-    return {
-        "status": "SUCCESS",
-        "proposed_config": updated_config,
-        "explanation": explanation,
-        "model_used": "anthropic/claude-sonnet-4-6",
+@router.post("/propose-fix", response_model=ProposeFixResponse)
+def propose_fix(request: ProposeFixRequest):
+    """
+    Fix-proposer loop (Component F).
+    Takes {scene_config, coverage_flags, physics_flags} evidence from a Kit render
+    (see POST /render), asks fix_agent to propose fixes from the fixed set of fix
+    types, and mutates scene_config via fix_agent.apply_fix for each proposed fix.
+    The caller is expected to re-submit the returned updated_scene_config to
+    /generate-usd -> /render to verify the fix actually resolved the flags.
+    """
+    evidence = {
+        "shot_id": request.shot_id,
+        "scene_config": request.scene_config.model_dump(),
+        "coverage_flags": request.coverage_flags,
+        "physics_flags": request.physics_flags,
     }
+
+    try:
+        result = fix_agent.propose_fixes(evidence)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Fix proposal failed: {str(e)}")
+
+    fixes = result.get("fixes", []) if isinstance(result, dict) else []
+
+    updated_config = request.scene_config.model_dump()
+    for fix in fixes:
+        updated_config = fix_agent.apply_fix(updated_config, fix)
+
+    return ProposeFixResponse(
+        status="SUCCESS",
+        fixes=fixes,
+        updated_scene_config=updated_config,
+        model_used="anthropic/claude-sonnet-4-6",
+    )

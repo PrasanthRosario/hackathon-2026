@@ -6,7 +6,7 @@ help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*##"; printf "\nAvailable commands:\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 backend-dev: ## Run the backend API locally with reload
-	cd backend && uv run uvicorn main:app --reload --app-dir src
+	cd backend && uv run --extra usd uvicorn main:app --reload --app-dir src
 
 backend-test: ## Run backend tests
 	cd backend && uv run --extra dev pytest

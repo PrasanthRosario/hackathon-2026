@@ -72,6 +72,7 @@ class GenerateUSDResponse(BaseModel):
     usd_path: str
     prim_count: int
     message: str
+    usd_content: Optional[str] = None
 
 
 class RenderRequest(BaseModel):
@@ -83,3 +84,17 @@ class RenderStatusResponse(BaseModel):
     status: str  # "pending" | "done" | "failed"
     scene_id: str
     message: Optional[str] = None
+
+
+class ProposeFixRequest(BaseModel):
+    scene_config: SceneConfigSchema
+    coverage_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    physics_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    shot_id: Optional[str] = None
+
+
+class ProposeFixResponse(BaseModel):
+    status: str
+    fixes: List[Dict[str, Any]] = Field(default_factory=list)
+    updated_scene_config: SceneConfigSchema
+    model_used: str

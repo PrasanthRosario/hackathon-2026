@@ -14,6 +14,10 @@ export default defineConfig({
       '/offset': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+      },
+      '/renders': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       }
     }
   }

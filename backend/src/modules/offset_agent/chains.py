@@ -5,8 +5,9 @@ Scoped within offset_agent module.
 Model Routing Rules:
 - HaikuChain (~anthropic/claude-haiku-latest): Clarifying questions (1-2 targeted questions at a time).
 - SonnetExtractChain (anthropic/claude-sonnet-4-6): Structured JSON extraction & tool calling.
-- SonnetFixChain (anthropic/claude-sonnet-4-6): Reasoning and fix proposals for physics/coverage flags.
 - OpusEscalationChain (anthropic/claude-opus-5): Optional escalation chain.
+
+Fix proposals for physics/coverage flags live in fix_agent.py (Component F), not here.
 """
 
 import os
@@ -177,47 +178,9 @@ def run_sonnet_extraction(messages: list) -> Tuple[Optional[dict], str]:
     return config, summary
 
 
-# ---------------------------------------------------------------------------
-# 3. Sonnet Fix Chain: Reasoning on Physics / Coverage Issues
-# ---------------------------------------------------------------------------
-SONNET_FIX_SYSTEM_PROMPT = """You are Offset Scene Optimizer.
-You are given a film set JSON configuration and a list of physical/camera violation flags (e.g. wall clipping, light stand intrusion, camera out-of-bounds, target occlusion).
-
-Your job is to:
-1. Explain the root cause of the violation in director-friendly terminology.
-2. Propose concrete numeric adjustments to wall positions, camera focal lengths, or dolly paths to fix the issue.
-3. Return the updated JSON configuration.
-"""
-
-
-def run_sonnet_fix_proposal(current_config: dict, issues: list) -> Tuple[dict, str]:
-    """Runs Sonnet fix reasoning chain on physics/coverage issues."""
-    llm = get_llm("sonnet", temperature=0.2)
-    
-    prompt = f"""Current Scene Config:
-{json.dumps(current_config, indent=2)}
-
-Detected Issues:
-{json.dumps(issues, indent=2)}
-
-Propose a fix with corrected parameters and return the modified JSON inside ```json``` code block."""
-
-    response = llm.invoke([SystemMessage(content=SONNET_FIX_SYSTEM_PROMPT), HumanMessage(content=prompt)]).content
-    
-    json_match = re.search(r"```json\s*(\{.*?\})\s*```", response, re.DOTALL)
-    updated_config = current_config
-    if json_match:
-        try:
-            updated_config = json.loads(json_match.group(1))
-        except Exception as e:
-            print("Failed to parse fix JSON:", e)
-            
-    explanation = re.sub(r"```json.*?```", "", response, flags=re.DOTALL).strip()
-    return updated_config, explanation
-
 
 # ---------------------------------------------------------------------------
-# 4. Opus Chain: Optional Escalation Path
+# 3. Opus Chain: Optional Escalation Path
 # ---------------------------------------------------------------------------
 def run_opus_escalation(prompt_text: str) -> str:
     """Escalation path to Opus model for complex layout reasoning."""

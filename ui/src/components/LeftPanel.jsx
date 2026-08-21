@@ -13,7 +13,6 @@ export default function LeftPanel({
   usdStatus,
   onCheckCoverage,
   onCheckPhysics,
-  onProposeFix,
   checkResults
 }) {
   const [inputText, setInputText] = useState('');
@@ -253,10 +252,10 @@ export default function LeftPanel({
                       Physics Clearance
                     </button>
                   </div>
-
-                  <button className="ph-btn ph-btn-sm ph-btn-yellow" style={{ width: '100%' }} onClick={onProposeFix}>
-                    Propose Spatial Fix (Sonnet)
-                  </button>
+                  <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', margin: 0 }}>
+                    Fast heuristic checks only. For real render/physics/coverage validation and fix
+                    verification, use "Render in Kit" in the viewport panel →
+                  </p>
                 </div>
               )}
             </div>

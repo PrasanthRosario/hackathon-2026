@@ -21,6 +21,10 @@ export default function App() {
   const [usdStatus, setUsdStatus] = useState(null);
   const [isGeneratingUSD, setIsGeneratingUSD] = useState(false);
   const [checkResults, setCheckResults] = useState(null);
+  const [kitRenderStatus, setKitRenderStatus] = useState('idle'); // idle | rendering | done | failed
+  const [kitRenderResult, setKitRenderResult] = useState(null);
+  const [kitRenderError, setKitRenderError] = useState(null);
+  const [isFixing, setIsFixing] = useState(false);
 
   // Send conversational turn to FastAPI backend (/api/chat)
   const handleSendMessage = async (text) => {
@@ -112,6 +116,144 @@ export default function App() {
     }
   };
 
+  // POST /api/render -> invokes kit_render_worker.py via subprocess and returns
+  // render paths + coverage_flags + physics_flags for the current USD stage.
+  // Accepts an optional usdContentOverride so callers (like the fix-and-reverify
+  // loop below) can render a just-regenerated stage without waiting on a state update.
+  const handleRenderInKit = async (usdContentOverride) => {
+    const usdContent = usdContentOverride || usdStatus?.usd_content;
+    if (!usdContent) return null;
+    setKitRenderStatus('rendering');
+    setKitRenderError(null);
+
+    const sceneId = `scene_${Date.now()}`;
+
+    try {
+      const response = await fetch('/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usd_content: usdContent,
+          scene_id: sceneId
+        })
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.detail || `Render failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      setKitRenderResult(data);
+      setKitRenderStatus('done');
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `🎬 **Kit Render Complete.**\n${(data.render_files || []).length} camera(s) rendered. ${(data.coverage_flags || []).length} coverage flag(s), ${(data.physics_flags || []).filter(f => !f.stable).length} physics instability flag(s).`,
+          model_used: 'kit_render_worker'
+        }
+      ]);
+      return data;
+    } catch (err) {
+      console.error('Kit render error:', err);
+      setKitRenderError(err.message);
+      setKitRenderStatus('failed');
+      return null;
+    }
+  };
+
+  // POST /api/propose-fix -> Sonnet fix-proposer agent (fix_agent.py) reasons over
+  // the latest coverage/physics flags and proposes fixes from a fixed set of types.
+  // Closes the loop: apply the fixes, regenerate USD, re-render in Kit, and show
+  // whether the flags actually cleared - not just that a fix was proposed.
+  const handleProposeFixAndReverify = async () => {
+    if (!sceneConfig || !kitRenderResult) return;
+    setIsFixing(true);
+
+    const flagsBefore = {
+      coverage: (kitRenderResult.coverage_flags || []).length,
+      physics: (kitRenderResult.physics_flags || []).filter(f => !f.stable).length,
+    };
+
+    try {
+      const fixRes = await fetch('/api/propose-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scene_config: sceneConfig,
+          coverage_flags: kitRenderResult.coverage_flags || [],
+          physics_flags: kitRenderResult.physics_flags || [],
+        })
+      });
+
+      if (!fixRes.ok) {
+        const errBody = await fixRes.json().catch(() => ({}));
+        throw new Error(errBody.detail || `Fix proposal failed with status ${fixRes.status}`);
+      }
+
+      const fixData = await fixRes.json();
+      const fixes = fixData.fixes || [];
+
+      setSceneConfig(fixData.updated_scene_config);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: fixes.length
+            ? `🔧 **Proposed ${fixes.length} fix(es):**\n${fixes.map(f => `- **${f.fix_type}** on \`${f.target_id}\`: ${f.rationale}`).join('\n')}\n\nRegenerating USD and re-rendering to verify...`
+            : '🔧 No fixes proposed for the current flags.',
+          model_used: fixData.model_used,
+        }
+      ]);
+
+      if (fixes.length === 0) {
+        setIsFixing(false);
+        return;
+      }
+
+      // Re-generate USD from the fixed config, then re-render in Kit to verify.
+      const usdRes = await fetch('/api/generate-usd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scene_config: fixData.updated_scene_config,
+          output_filename: 'generated_set.usda'
+        })
+      });
+      const usdData = await usdRes.json();
+      setUsdStatus(usdData);
+
+      const reverifyResult = await handleRenderInKit(usdData.usd_content);
+
+      if (reverifyResult) {
+        const flagsAfter = {
+          coverage: (reverifyResult.coverage_flags || []).length,
+          physics: (reverifyResult.physics_flags || []).filter(f => !f.stable).length,
+        };
+        const resolved = flagsAfter.coverage < flagsBefore.coverage || flagsAfter.physics < flagsBefore.physics;
+        const unchanged = flagsAfter.coverage === flagsBefore.coverage && flagsAfter.physics === flagsBefore.physics;
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `${resolved ? '✅' : unchanged ? '⚠️' : '🔻'} **Re-verification result:** coverage flags ${flagsBefore.coverage} → ${flagsAfter.coverage}, physics flags ${flagsBefore.physics} → ${flagsAfter.physics}.`,
+            model_used: 'kit_render_worker'
+          }
+        ]);
+      }
+    } catch (err) {
+      console.error('Propose fix error:', err);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `Fix loop failed: ${err.message}`, model_used: 'error' }
+      ]);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
   // Preset Loaders
   const handleLoadPreset = (presetType) => {
     let presetConfig;
@@ -195,27 +337,6 @@ export default function App() {
     }
   };
 
-  const handleProposeFix = async () => {
-    if (!sceneConfig) return;
-    try {
-      const res = await fetch('/api/propose-fix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          current_config: sceneConfig,
-          issues: checkResults?.issues || [{ rule: 'clearance_warning', detail: 'Camera close to wall' }]
-        })
-      });
-      const data = await res.json();
-      setCheckResults(data);
-      if (data.proposed_config) {
-        setSceneConfig(data.proposed_config);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
     <div className="app-container">
       <Header
@@ -237,13 +358,18 @@ export default function App() {
           usdStatus={usdStatus}
           onCheckCoverage={handleCheckCoverage}
           onCheckPhysics={handleCheckPhysics}
-          onProposeFix={handleProposeFix}
           checkResults={checkResults}
         />
 
         <RenderView
           sceneConfig={sceneConfig}
           usdStatus={usdStatus}
+          onRenderInKit={handleRenderInKit}
+          kitRenderStatus={kitRenderStatus}
+          kitRenderResult={kitRenderResult}
+          kitRenderError={kitRenderError}
+          onProposeFix={handleProposeFixAndReverify}
+          isFixing={isFixing}
         />
       </main>
     </div>

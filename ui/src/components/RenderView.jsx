@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
 import ThreeCanvas from './ThreeCanvas';
 import OmniverseStreamView from './OmniverseStreamView';
-import { Box, Radio, Layers } from 'lucide-react';
+import KitRenderResultView from './KitRenderResultView';
+import { Box, Radio, Layers, Zap, Loader2 } from 'lucide-react';
 
-export default function RenderView({ sceneConfig, usdStatus }) {
+export default function RenderView({
+  sceneConfig,
+  usdStatus,
+  onRenderInKit,
+  kitRenderStatus,
+  kitRenderResult,
+  kitRenderError,
+  onProposeFix,
+  isFixing,
+}) {
   const [renderMode, setRenderMode] = useState('threejs');
+  const isRendering = kitRenderStatus === 'rendering';
 
   return (
     <div style={{
@@ -48,6 +59,14 @@ export default function RenderView({ sceneConfig, usdStatus }) {
             <Radio size={13} />
             Omniverse Kit Stream
           </button>
+
+          <button
+            className={`ph-btn ph-btn-sm ${renderMode === 'kit_result' ? 'ph-btn-primary' : ''}`}
+            onClick={() => setRenderMode('kit_result')}
+          >
+            <Zap size={13} />
+            Kit Render Result
+          </button>
         </div>
 
         {/* Viewport Meta Details */}
@@ -56,6 +75,19 @@ export default function RenderView({ sceneConfig, usdStatus }) {
             <Layers size={11} />
             Walls: {sceneConfig?.walls?.length || 0} | Shots: {sceneConfig?.shots?.length || 0}
           </span>
+
+          <button
+            className="ph-btn ph-btn-sm ph-btn-yellow"
+            onClick={() => {
+              setRenderMode('kit_result');
+              onRenderInKit();
+            }}
+            disabled={!usdStatus?.usd_content || isRendering}
+            title={!usdStatus?.usd_content ? 'Generate a USD stage first' : 'Run kit_render_worker.py on the current stage'}
+          >
+            {isRendering ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+            {isRendering ? 'Rendering...' : 'Render in Kit'}
+          </button>
         </div>
       </div>
 
@@ -67,6 +99,16 @@ export default function RenderView({ sceneConfig, usdStatus }) {
 
         {renderMode === 'omniverse_webrtc' && (
           <OmniverseStreamView usdPath={usdStatus?.usd_path} />
+        )}
+
+        {renderMode === 'kit_result' && (
+          <KitRenderResultView
+            status={kitRenderStatus || 'idle'}
+            result={kitRenderResult}
+            error={kitRenderError}
+            onProposeFix={onProposeFix}
+            isFixing={isFixing}
+          />
         )}
       </div>
     </div>
