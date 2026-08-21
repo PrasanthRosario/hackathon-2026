@@ -1,0 +1,801 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    upAxis = "Z"
+    metersPerUnit = 1.0
+    doc = "Cooking Show Set - Previsualization Blockout"
+)
+
+def Xform "World"
+{
+    # ─────────────────────────────────────────────
+    # ARCHITECTURE  – floor, walls, ceiling, backdrop
+    # ─────────────────────────────────────────────
+    def Xform "Architecture"
+    {
+        # Studio Floor
+        def Cube "Floor"
+        {
+            double3 xformOp:translate = (0, 0, -0.05)
+            double3 xformOp:scale    = (10, 8, 0.05)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.55, 0.45, 0.35)]
+        }
+
+        # Back Wall
+        def Cube "BackWall"
+        {
+            double3 xformOp:translate = (0, 4.0, 1.75)
+            double3 xformOp:scale    = (10, 0.15, 1.75)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.92, 0.88, 0.82)]
+        }
+
+        # Left Wall
+        def Cube "LeftWall"
+        {
+            double3 xformOp:translate = (-10.0, 0, 1.75)
+            double3 xformOp:scale    = (0.15, 8, 1.75)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.92, 0.88, 0.82)]
+        }
+
+        # Right Wall
+        def Cube "RightWall"
+        {
+            double3 xformOp:translate = (10.0, 0, 1.75)
+            double3 xformOp:scale    = (0.15, 8, 1.75)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.92, 0.88, 0.82)]
+        }
+
+        # Ceiling
+        def Cube "Ceiling"
+        {
+            double3 xformOp:translate = (0, 0, 3.55)
+            double3 xformOp:scale    = (10, 8, 0.05)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.95, 0.95)]
+        }
+
+        # Decorative Backdrop Panel (behind cooking counter)
+        def Cube "BackdropPanel"
+        {
+            double3 xformOp:translate = (0, 3.7, 1.5)
+            double3 xformOp:scale    = (4.5, 0.08, 1.5)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.20, 0.45, 0.40)]
+        }
+
+        # Show Logo Plaque
+        def Cube "LogoPlaque"
+        {
+            double3 xformOp:translate = (0, 3.62, 2.2)
+            double3 xformOp:scale    = (1.2, 0.04, 0.25)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.80, 0.20)]
+        }
+    }
+
+    # ─────────────────────────────────────────────
+    # COOKING COUNTER  – island, stove, sink, shelves
+    # ─────────────────────────────────────────────
+    def Xform "CookingCounter"
+    {
+        # Main Counter Island Body
+        def Cube "IslandBody"
+        {
+            double3 xformOp:translate = (0, 1.5, 0.45)
+            double3 xformOp:scale    = (1.8, 0.45, 0.45)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.85, 0.82, 0.78)]
+        }
+
+        # Counter Top Surface
+        def Cube "CounterTop"
+        {
+            double3 xformOp:translate = (0, 1.5, 0.93)
+            double3 xformOp:scale    = (1.85, 0.48, 0.04)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.20, 0.20, 0.20)]
+        }
+
+        # Stove / Cooktop (recessed into counter top)
+        def Cube "Cooktop"
+        {
+            double3 xformOp:translate = (-0.6, 1.5, 0.975)
+            double3 xformOp:scale    = (0.55, 0.38, 0.02)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.12, 0.12, 0.12)]
+        }
+
+        # Burner 1
+        def Cylinder "Burner1"
+        {
+            double radius = 0.09
+            double height = 0.015
+            double3 xformOp:translate = (-0.78, 1.3, 0.998)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.30)]
+        }
+
+        # Burner 2
+        def Cylinder "Burner2"
+        {
+            double radius = 0.09
+            double height = 0.015
+            double3 xformOp:translate = (-0.42, 1.3, 0.998)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.30)]
+        }
+
+        # Burner 3
+        def Cylinder "Burner3"
+        {
+            double radius = 0.09
+            double height = 0.015
+            double3 xformOp:translate = (-0.78, 1.7, 0.998)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.30)]
+        }
+
+        # Burner 4
+        def Cylinder "Burner4"
+        {
+            double radius = 0.09
+            double height = 0.015
+            double3 xformOp:translate = (-0.42, 1.7, 0.998)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.30)]
+        }
+
+        # Sink Basin
+        def Cube "SinkBasin"
+        {
+            double3 xformOp:translate = (0.75, 1.5, 0.94)
+            double3 xformOp:scale    = (0.35, 0.30, 0.06)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.75, 0.75, 0.78)]
+        }
+
+        # Faucet Neck
+        def Cylinder "FaucetNeck"
+        {
+            double radius = 0.02
+            double height = 0.22
+            double3 xformOp:translate = (0.75, 1.28, 1.08)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.80, 0.80, 0.82)]
+        }
+
+        # Faucet Head
+        def Sphere "FaucetHead"
+        {
+            double radius = 0.03
+            double3 xformOp:translate = (0.75, 1.28, 1.20)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.80, 0.80, 0.82)]
+        }
+
+        # Range Hood
+        def Cube "RangeHood"
+        {
+            double3 xformOp:translate = (-0.6, 1.5, 1.8)
+            double3 xformOp:scale    = (0.65, 0.40, 0.18)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.70, 0.70, 0.72)]
+        }
+
+        # Hood Duct
+        def Cylinder "HoodDuct"
+        {
+            double radius = 0.12
+            double height = 0.55
+            double3 xformOp:translate = (-0.6, 1.5, 2.25)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.65, 0.65, 0.68)]
+        }
+
+        # Back Shelf Unit
+        def Cube "BackShelfUnit"
+        {
+            double3 xformOp:translate = (0, 3.3, 0.9)
+            double3 xformOp:scale    = (2.5, 0.20, 0.9)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.75, 0.70, 0.62)]
+        }
+
+        # Shelf 1
+        def Cube "Shelf1"
+        {
+            double3 xformOp:translate = (0, 3.12, 1.0)
+            double3 xformOp:scale    = (2.5, 0.04, 0.03)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.60, 0.55, 0.45)]
+        }
+
+        # Shelf 2
+        def Cube "Shelf2"
+        {
+            double3 xformOp:translate = (0, 3.12, 1.55)
+            double3 xformOp:scale    = (2.5, 0.04, 0.03)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.60, 0.55, 0.45)]
+        }
+
+        # Shelf 3
+        def Cube "Shelf3"
+        {
+            double3 xformOp:translate = (0, 3.12, 2.1)
+            double3 xformOp:scale    = (2.5, 0.04, 0.03)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.60, 0.55, 0.45)]
+        }
+    }
+
+    # ─────────────────────────────────────────────
+    # PROPS  – pots, bowls, cutting board, knife block, spice rack, fruit bowl
+    # ─────────────────────────────────────────────
+    def Xform "Props"
+    {
+        # Large Pot on Burner 1
+        def Cylinder "LargePot"
+        {
+            double radius = 0.12
+            double height = 0.18
+            double3 xformOp:translate = (-0.78, 1.3, 1.10)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.25, 0.25, 0.28)]
+        }
+
+        # Pot Lid
+        def Cylinder "PotLid"
+        {
+            double radius = 0.13
+            double height = 0.03
+            double3 xformOp:translate = (-0.78, 1.3, 1.205)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.35, 0.35, 0.38)]
+        }
+
+        # Frying Pan on Burner 3
+        def Cylinder "FryingPan"
+        {
+            double radius = 0.14
+            double height = 0.05
+            double3 xformOp:translate = (-0.78, 1.7, 1.02)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.18, 0.18, 0.20)]
+        }
+
+        # Cutting Board
+        def Cube "CuttingBoard"
+        {
+            double3 xformOp:translate = (0.25, 1.5, 0.975)
+            double3 xformOp:scale    = (0.28, 0.20, 0.015)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.72, 0.55, 0.35)]
+        }
+
+        # Knife Block
+        def Cube "KnifeBlock"
+        {
+            double3 xformOp:translate = (1.3, 1.5, 1.05)
+            double3 xformOp:scale    = (0.10, 0.08, 0.12)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.45, 0.30, 0.18)]
+        }
+
+        # Mixing Bowl (large)
+        def Sphere "MixingBowlLarge"
+        {
+            double radius = 0.14
+            double3 xformOp:translate = (0.0, 3.12, 1.17)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.90, 0.90, 0.92)]
+        }
+
+        # Mixing Bowl (small)
+        def Sphere "MixingBowlSmall"
+        {
+            double radius = 0.09
+            double3 xformOp:translate = (0.55, 3.12, 1.12)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.85, 0.40, 0.20)]
+        }
+
+        # Spice Rack
+        def Cube "SpiceRack"
+        {
+            double3 xformOp:translate = (-1.5, 3.12, 1.12)
+            double3 xformOp:scale    = (0.35, 0.10, 0.12)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.55, 0.42, 0.30)]
+        }
+
+        # Spice Jar 1
+        def Cylinder "SpiceJar1"
+        {
+            double radius = 0.03
+            double height = 0.09
+            double3 xformOp:translate = (-1.62, 3.12, 1.17)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.80, 0.30, 0.10)]
+        }
+
+        # Spice Jar 2
+        def Cylinder "SpiceJar2"
+        {
+            double radius = 0.03
+            double height = 0.09
+            double3 xformOp:translate = (-1.50, 3.12, 1.17)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.20, 0.55, 0.20)]
+        }
+
+        # Spice Jar 3
+        def Cylinder "SpiceJar3"
+        {
+            double radius = 0.03
+            double height = 0.09
+            double3 xformOp:translate = (-1.38, 3.12, 1.17)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.90, 0.85, 0.20)]
+        }
+
+        # Fruit Bowl
+        def Sphere "FruitBowl"
+        {
+            double radius = 0.13
+            double3 xformOp:translate = (1.0, 3.12, 1.16)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.85, 0.75, 0.55)]
+        }
+
+        # Apple in bowl
+        def Sphere "Apple"
+        {
+            double radius = 0.05
+            double3 xformOp:translate = (1.0, 3.12, 1.32)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.85, 0.15, 0.10)]
+        }
+
+        # Lemon in bowl
+        def Sphere "Lemon"
+        {
+            double radius = 0.04
+            double3 xformOp:translate = (1.08, 3.18, 1.30)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.95, 0.90, 0.15)]
+        }
+
+        # Refrigerator Body
+        def Cube "FridgeBody"
+        {
+            double3 xformOp:translate = (-7.5, 2.5, 1.0)
+            double3 xformOp:scale    = (0.45, 0.65, 1.0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.88, 0.88, 0.90)]
+        }
+
+        # Refrigerator Handle
+        def Cube "FridgeHandle"
+        {
+            double3 xformOp:translate = (-7.08, 2.5, 1.2)
+            double3 xformOp:scale    = (0.03, 0.04, 0.35)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.60, 0.60, 0.62)]
+        }
+
+        # Oven Body
+        def Cube "OvenBody"
+        {
+            double3 xformOp:translate = (-5.5, 3.5, 0.5)
+            double3 xformOp:scale    = (0.45, 0.45, 0.5)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.20, 0.20, 0.22)]
+        }
+
+        # Oven Door
+        def Cube "OvenDoor"
+        {
+            double3 xformOp:translate = (-5.07, 3.5, 0.5)
+            double3 xformOp:scale    = (0.03, 0.38, 0.38)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.32)]
+        }
+
+        # Oven Window
+        def Cube "OvenWindow"
+        {
+            double3 xformOp:translate = (-5.04, 3.5, 0.52)
+            double3 xformOp:scale    = (0.01, 0.22, 0.22)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.40, 0.55, 0.65)]
+        }
+    }
+
+    # ─────────────────────────────────────────────
+    # HOST  – chef / show host standing behind counter
+    # ─────────────────────────────────────────────
+    def Xform "Host"
+    {
+        # Legs
+        def Cube "LegLeft"
+        {
+            double3 xformOp:translate = (-0.15, 2.2, 0.45)
+            double3 xformOp:scale    = (0.10, 0.10, 0.45)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.20, 0.20, 0.55)]
+        }
+
+        def Cube "LegRight"
+        {
+            double3 xformOp:translate = (0.15, 2.2, 0.45)
+            double3 xformOp:scale    = (0.10, 0.10, 0.45)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.20, 0.20, 0.55)]
+        }
+
+        # Torso (white chef coat)
+        def Cube "Torso"
+        {
+            double3 xformOp:translate = (0, 2.2, 1.15)
+            double3 xformOp:scale    = (0.22, 0.14, 0.35)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.95, 0.95)]
+        }
+
+        # Head
+        def Sphere "Head"
+        {
+            double radius = 0.12
+            double3 xformOp:translate = (0, 2.2, 1.65)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.90, 0.75, 0.60)]
+        }
+
+        # Chef Hat
+        def Cylinder "ChefHat"
+        {
+            double radius = 0.10
+            double height = 0.22
+            double3 xformOp:translate = (0, 2.2, 1.87)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.98, 0.98, 0.98)]
+        }
+
+        # Arm Left
+        def Cube "ArmLeft"
+        {
+            double3 xformOp:translate = (-0.35, 2.2, 1.15)
+            double3 xformOp:scale    = (0.08, 0.08, 0.30)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.95, 0.95)]
+        }
+
+        # Arm Right
+        def Cube "ArmRight"
+        {
+            double3 xformOp:translate = (0.35, 2.2, 1.15)
+            double3 xformOp:scale    = (0.08, 0.08, 0.30)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.95, 0.95)]
+        }
+    }
+
+    # ─────────────────────────────────────────────
+    # AUDIENCE SEATING  – two rows of stools
+    # ─────────────────────────────────────────────
+    def Xform "Audience"
+    {
+        # Row 1 – 4 stools
+        def Xform "Row1"
+        {
+            def Cylinder "Stool1Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (-2.4, -2.0, 0.72)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool1Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (-2.4, -2.0, 0.35)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+
+            def Cylinder "Stool2Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (-0.8, -2.0, 0.72)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool2Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (-0.8, -2.0, 0.35)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+
+            def Cylinder "Stool3Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (0.8, -2.0, 0.72)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool3Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (0.8, -2.0, 0.35)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+
+            def Cylinder "Stool4Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (2.4, -2.0, 0.72)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool4Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (2.4, -2.0, 0.35)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+        }
+
+        # Row 2 – 4 stools (further back, slightly elevated on riser)
+        def Xform "Row2"
+        {
+            def Cube "Riser"
+            {
+                double3 xformOp:translate = (0, -4.0, 0.15)
+                double3 xformOp:scale    = (4.0, 0.6, 0.15)
+                uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+                color3f[] primvars:displayColor = [(0.45, 0.38, 0.30)]
+            }
+
+            def Cylinder "Stool5Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (-2.4, -4.0, 1.02)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool5Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (-2.4, -4.0, 0.65)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+
+            def Cylinder "Stool6Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (-0.8, -4.0, 1.02)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool6Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (-0.8, -4.0, 0.65)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+
+            def Cylinder "Stool7Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (0.8, -4.0, 1.02)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool7Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (0.8, -4.0, 0.65)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+
+            def Cylinder "Stool8Seat"
+            {
+                double radius = 0.18
+                double height = 0.05
+                double3 xformOp:translate = (2.4, -4.0, 1.02)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.55, 0.28, 0.10)]
+            }
+            def Cylinder "Stool8Leg"
+            {
+                double radius = 0.04
+                double height = 0.70
+                double3 xformOp:translate = (2.4, -4.0, 0.65)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                color3f[] primvars:displayColor = [(0.50, 0.50, 0.52)]
+            }
+        }
+    }
+
+    # ─────────────────────────────────────────────
+    # LIGHTS
+    # ─────────────────────────────────────────────
+    def Xform "Lights"
+    {
+        # Key Light (overhead, slightly front)
+        def DistantLight "KeyLight"
+        {
+            float inputs:intensity = 2500
+            color3f inputs:color   = (1.0, 0.97, 0.90)
+            double3 xformOp:translate = (0, -1.0, 3.4)
+            float3 xformOp:rotateXYZ = (-70, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:rotateXYZ"]
+        }
+
+        # Fill Light (left side, softer)
+        def DistantLight "FillLight"
+        {
+            float inputs:intensity = 900
+            color3f inputs:color   = (0.85, 0.90, 1.0)
+            double3 xformOp:translate = (-4.0, 0, 3.0)
+            float3 xformOp:rotateXYZ = (-50, 30, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:rotateXYZ"]
+        }
+
+        # Rim / Back Light
+        def DistantLight "RimLight"
+        {
+            float inputs:intensity = 600
+            color3f inputs:color   = (1.0, 0.95, 0.80)
+            double3 xformOp:translate = (3.0, 3.5, 3.0)
+            float3 xformOp:rotateXYZ = (-40, -45, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:rotateXYZ"]
+        }
+
+        # Practical Overhead Pendant 1
+        def Sphere "Pendant1"
+        {
+            double radius = 0.12
+            double3 xformOp:translate = (-1.5, 1.5, 2.8)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(1.0, 0.95, 0.70)]
+        }
+
+        # Practical Overhead Pendant 2
+        def Sphere "Pendant2"
+        {
+            double radius = 0.12
+            double3 xformOp:translate = (1.5, 1.5, 2.8)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(1.0, 0.95, 0.70)]
+        }
+
+        # Pendant Cord 1
+        def Cylinder "PendantCord1"
+        {
+            double radius = 0.01
+            double height = 0.55
+            double3 xformOp:translate = (-1.5, 1.5, 3.1)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.20, 0.20, 0.20)]
+        }
+
+        # Pendant Cord 2
+        def Cylinder "PendantCord2"
+        {
+            double radius = 0.01
+            double height = 0.55
+            double3 xformOp:translate = (1.5, 1.5, 3.1)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.20, 0.20, 0.20)]
+        }
+
+        # Softbox Light Stand Left
+        def Cylinder "SoftboxStandLeft"
+        {
+            double radius = 0.03
+            double height = 2.2
+            double3 xformOp:translate = (-8.0, -1.0, 1.1)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.30)]
+        }
+
+        def Cube "SoftboxHeadLeft"
+        {
+            double3 xformOp:translate = (-8.0, -1.0, 2.4)
+            double3 xformOp:scale    = (0.50, 0.08, 0.40)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.95, 0.95)]
+        }
+
+        # Softbox Light Stand Right
+        def Cylinder "SoftboxStandRight"
+        {
+            double radius = 0.03
+            double height = 2.2
+            double3 xformOp:translate = (8.0, -1.0, 1.1)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            color3f[] primvars:displayColor = [(0.30, 0.30, 0.30)]
+        }
+
+        def Cube "SoftboxHeadRight"
+        {
+            double3 xformOp:translate = (8.0, -1.0, 2.4)
+            double3 xformOp:scale    = (0.50, 0.08, 0.40)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.95, 0.95, 0.95)]
+        }
+
+        # Ambient Dome
+        def DomeLight "AmbientDome"
+        {
+            float inputs:intensity = 300
+            color3f inputs:color   = (0.80, 0.85, 0.90)
+        }
+    }
+
+    # ─────────────────────────────────────────────
+    # CAMERAS
+    # ─────────────────────────────────────────────
+    def Xform "Cameras"
+    {
+        # Wide Shot Camera – captures full set
+        def Camera "WideCamera"
+        {
+            float focalLength = 24
+            float horizontalAperture = 36
+            float verticalAperture   = 24
+            double3 xformOp:translate = (0, -7.5, 1.6)
+            float3 xformOp:rotateXYZ  = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:rotateXYZ"]
+        }
+
+        # Detail / Close-up Camera – focuses on counter
+        def Camera "DetailCamera"
+        {
+            float focalLength = 85
+            float horizontalAperture = 36
+            float verticalAperture   = 24
+            double3 xformOp:translate = (2.5, -2.5, 1.4)
+            float3 xformOp:rotateXYZ  = (0, -25, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:rotateXYZ"]
+        }
+
+        # Overhead / Hero-shot Camera
+        def Camera "OverheadCamera"
+        {
+            float focalLength = 35
+            float horizontalAperture = 36
+            float verticalAperture   = 24
+            double3 xformOp:translate = (0, 1.5, 3.2)
+            float3 xformOp:rotateXYZ  = (-80, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate","xformOp:rotateXYZ"]
+        }
+    }
+}
