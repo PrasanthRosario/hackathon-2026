@@ -2,24 +2,34 @@ import React, { useState } from 'react';
 import Header from './components/Header';
 import LeftPanel from './components/LeftPanel';
 import RenderView from './components/RenderView';
+import {
+  checkCoverage,
+  checkPhysics,
+  downloadUsdFromPrompt,
+  generateUsd,
+  proposeFix,
+  sendChatTurn
+} from './api/offsetAgent';
 
 export default function App() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
       content: 'Welcome to Offset! I am your pre-visualization set validation assistant for NVIDIA Omniverse. Describe your film set (e.g., "2 walls forming a corner, 4m wide, with a floor and 3m ceiling"), and I will help you refine and validate it.',
-      model_used: '~anthropic/claude-haiku-latest'
+      model_used: 'offset-agent'
     }
   ]);
 
   // Default scene state starts clean (no pre-extracted confirmation card)
   const [sceneConfig, setSceneConfig] = useState(null);
-  const [currentModel, setCurrentModel] = useState('~anthropic/claude-haiku-latest');
+  const [currentScene, setCurrentScene] = useState(null);
+  const [currentModel, setCurrentModel] = useState('offset-agent');
   const [isLoading, setIsLoading] = useState(false);
   const [readyForConfirmation, setReadyForConfirmation] = useState(false);
   const [readableSummary, setReadableSummary] = useState(null);
   const [usdStatus, setUsdStatus] = useState(null);
   const [isGeneratingUSD, setIsGeneratingUSD] = useState(false);
+  const [isDownloadingPromptUSD, setIsDownloadingPromptUSD] = useState(false);
   const [checkResults, setCheckResults] = useState(null);
   const [kitRenderStatus, setKitRenderStatus] = useState('idle'); // idle | rendering | done | failed
   const [kitRenderResult, setKitRenderResult] = useState(null);
@@ -37,20 +47,11 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          current_config: sceneConfig
-        })
+      const data = await sendChatTurn({
+        messages: updatedMessages,
+        currentConfig: sceneConfig,
+        currentScene
       });
-
-      if (!response.ok) {
-        throw new Error(`API error ${response.status}`);
-      }
-
-      const data = await response.json();
 
       setMessages([
         ...updatedMessages,
@@ -67,6 +68,9 @@ export default function App() {
       if (data.scene_config) {
         setSceneConfig(data.scene_config);
       }
+      if (data.scene) {
+        setCurrentScene(data.scene);
+      }
       if (data.readable_summary) {
         setReadableSummary(data.readable_summary);
       }
@@ -76,7 +80,7 @@ export default function App() {
         ...updatedMessages,
         {
           role: 'assistant',
-          content: 'Sorry, I encountered an issue connecting to the LangChain backend. Please check backend server status.',
+          content: `Sorry, I could not reach the backend chat API. ${err.message}`,
           model_used: 'error'
         }
       ]);
@@ -87,20 +91,15 @@ export default function App() {
 
   // POST /api/generate-usd
   const handleConfirmGenerateUSD = async () => {
-    if (!sceneConfig) return;
+    if (!sceneConfig && !currentScene) return;
     setIsGeneratingUSD(true);
 
     try {
-      const response = await fetch('/api/generate-usd', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scene_config: sceneConfig,
-          output_filename: 'generated_set.usda'
-        })
+      const data = await generateUsd({
+        sceneConfig: sceneConfig || { walls: [], floor: { width: 8, depth: 6 }, shots: [] },
+        currentScene,
+        outputFilename: 'generated_set.usda'
       });
-
-      const data = await response.json();
       setUsdStatus(data);
 
       setMessages(prev => [
@@ -116,6 +115,39 @@ export default function App() {
       alert('Failed to generate USD file.');
     } finally {
       setIsGeneratingUSD(false);
+    }
+  };
+
+  const handleDownloadPromptUSD = async (prompt) => {
+    if (!prompt.trim() || isDownloadingPromptUSD) return;
+    setIsDownloadingPromptUSD(true);
+
+    try {
+      const blob = await downloadUsdFromPrompt({
+        prompt,
+        messages,
+        outputFilename: 'agent_generated.usda'
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'agent_generated.usda';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download USD error:', err);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Sorry, I could not generate the USD download. ${err.message}`,
+          model_used: 'error'
+        }
+      ]);
+    } finally {
+      setIsDownloadingPromptUSD(false);
     }
   };
 
@@ -335,6 +367,7 @@ export default function App() {
         ]
       };
       setSceneConfig(presetConfig);
+      setCurrentScene(null);
       setReadyForConfirmation(true);
       setMessages(prev => [
         ...prev,
@@ -358,6 +391,7 @@ export default function App() {
         ]
       };
       setSceneConfig(presetConfig);
+      setCurrentScene(null);
       setReadyForConfirmation(true);
       setMessages(prev => [
         ...prev,
@@ -374,12 +408,7 @@ export default function App() {
   const handleCheckCoverage = async () => {
     if (!sceneConfig) return;
     try {
-      const res = await fetch('/api/check-coverage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sceneConfig)
-      });
-      const data = await res.json();
+      const data = await checkCoverage(sceneConfig);
       setCheckResults(data);
     } catch (e) {
       console.error(e);
@@ -389,12 +418,7 @@ export default function App() {
   const handleCheckPhysics = async () => {
     if (!sceneConfig) return;
     try {
-      const res = await fetch('/api/check-physics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sceneConfig)
-      });
-      const data = await res.json();
+      const data = await checkPhysics(sceneConfig);
       setCheckResults(data);
     } catch (e) {
       console.error(e);
@@ -419,7 +443,9 @@ export default function App() {
           readyForConfirmation={readyForConfirmation}
           onConfirmGenerateUSD={handleConfirmGenerateUSD}
           isGeneratingUSD={isGeneratingUSD}
+          isDownloadingPromptUSD={isDownloadingPromptUSD}
           usdStatus={usdStatus}
+          onDownloadPromptUSD={handleDownloadPromptUSD}
           onCheckCoverage={handleCheckCoverage}
           onCheckPhysics={handleCheckPhysics}
           checkResults={checkResults}
@@ -427,6 +453,7 @@ export default function App() {
 
         <RenderView
           sceneConfig={sceneConfig}
+          sceneSpec={currentScene}
           usdStatus={usdStatus}
           onRenderInKit={handleRenderInKit}
           kitRenderStatus={kitRenderStatus}

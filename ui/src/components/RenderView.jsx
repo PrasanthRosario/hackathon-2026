@@ -6,6 +6,7 @@ import { Box, Radio, Layers, Zap, Loader2 } from 'lucide-react';
 
 export default function RenderView({
   sceneConfig,
+  sceneSpec,
   usdStatus,
   onRenderInKit,
   kitRenderStatus,
@@ -22,6 +23,9 @@ export default function RenderView({
 }) {
   const [renderMode, setRenderMode] = useState('threejs');
   const isRendering = kitRenderStatus === 'rendering';
+  const propCount = sceneSpec?.objects?.filter(
+    obj => !['floor', 'wall', 'ceiling'].includes(obj.kind)
+  ).length || 0;
 
   return (
     <div style={{
@@ -79,7 +83,7 @@ export default function RenderView({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="ph-badge ph-badge-grey">
             <Layers size={11} />
-            Walls: {sceneConfig?.walls?.length || 0} | Shots: {sceneConfig?.shots?.length || 0}
+            Walls: {sceneConfig?.walls?.length || 0} | Props: {propCount} | Shots: {sceneConfig?.shots?.length || 0}
           </span>
 
           <button
@@ -100,7 +104,7 @@ export default function RenderView({
       {/* Main Render Area */}
       <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
         {renderMode === 'threejs' && (
-          <ThreeCanvas sceneConfig={sceneConfig} />
+          <ThreeCanvas sceneConfig={sceneConfig} sceneSpec={sceneSpec} />
         )}
 
         {renderMode === 'omniverse_webrtc' && (

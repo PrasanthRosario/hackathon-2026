@@ -1,5 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, CheckCircle2, Cpu, Sparkles, Box, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, CheckCircle2, Cpu, Sparkles, Box, ChevronDown, ChevronUp, Download } from 'lucide-react';
+
+function getModelLabel(modelUsed) {
+  if (!modelUsed) return null;
+  if (modelUsed.includes('deterministic')) return 'Local Agent';
+  if (modelUsed.includes('haiku')) return 'Haiku';
+  if (modelUsed.includes('sonnet')) return 'Sonnet';
+  if (modelUsed.includes('opus')) return 'Opus';
+  if (modelUsed === 'error') return 'Error';
+  if (modelUsed === 'preset') return 'Preset';
+  return 'Offset Agent';
+}
 
 export default function LeftPanel({
   messages,
@@ -10,6 +21,8 @@ export default function LeftPanel({
   readyForConfirmation,
   onConfirmGenerateUSD,
   isGeneratingUSD,
+  isDownloadingPromptUSD,
+  onDownloadPromptUSD,
   usdStatus,
   onCheckCoverage,
   onCheckPhysics,
@@ -33,6 +46,11 @@ export default function LeftPanel({
   const handleQuickPrompt = (prompt) => {
     if (isLoading) return;
     onSendMessage(prompt);
+  };
+
+  const handleDownloadPromptUSD = () => {
+    if (!inputText.trim() || isLoading || isDownloadingPromptUSD) return;
+    onDownloadPromptUSD(inputText.trim());
   };
 
   return (
@@ -72,7 +90,7 @@ export default function LeftPanel({
               Set Assistant
             </h2>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-              OpenRouter Multi-Model Agent
+              Scene operation chat flow
             </p>
           </div>
         </div>
@@ -114,7 +132,7 @@ export default function LeftPanel({
               </span>
               {msg.model_used && (
                 <span className="ph-badge ph-badge-orange" style={{ fontSize: '9px', padding: '1px 6px' }}>
-                  {msg.model_used.includes('haiku') ? 'Haiku 3.5' : msg.model_used.includes('sonnet') ? 'Sonnet 3.5' : 'Opus'}
+                  {getModelLabel(msg.model_used)}
                 </span>
               )}
             </div>
@@ -152,7 +170,7 @@ export default function LeftPanel({
               color: 'var(--text-muted)'
             }}>
               <Cpu size={14} className="animate-spin" style={{ color: 'var(--accent-orange)' }} />
-              <span>Routing model via OpenRouter...</span>
+              <span>Sending scene request to backend...</span>
             </div>
           </div>
         )}
@@ -335,6 +353,19 @@ export default function LeftPanel({
           style={{ padding: '0 18px' }}
         >
           <Send size={16} />
+        </button>
+        <button
+          type="button"
+          disabled={isLoading || isDownloadingPromptUSD || !inputText.trim()}
+          className="ph-btn ph-btn-yellow"
+          style={{ padding: '0 14px' }}
+          onClick={handleDownloadPromptUSD}
+          title="Generate and download USD from prompt"
+        >
+          <Download size={16} />
+          <span style={{ fontSize: '11.5px' }}>
+            {isDownloadingPromptUSD ? 'USD...' : 'USD'}
+          </span>
         </button>
       </form>
     </div>

@@ -3,30 +3,37 @@ router.py - APIRouter for Offset Agent module.
 Scoped cleanly under /offset prefix and root /api aliases.
 """
 
-import os
-import sys
 import json
+import os
 import shutil
 import subprocess
+import sys
 import traceback
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Body
+from typing import Annotated, Any
 
+from fastapi import APIRouter, Body, HTTPException
+from fastapi.responses import FileResponse
+
+from modules.offset_agent import fix_agent
+from modules.offset_agent.deep_agent import run_offset_agent
 from modules.offset_agent.models import (
-    SceneConfigSchema,
     ChatRequest,
     ChatResponse,
     GenerateUSDRequest,
     GenerateUSDResponse,
-    RenderRequest,
-    RenderStatusResponse,
+    IngestKitOutputRequest,
     ProposeFixRequest,
     ProposeFixResponse,
-    IngestKitOutputRequest,
+    RenderRequest,
+    RenderStatusResponse,
+    SceneConfigSchema,
+    USDScriptChatRequest,
 )
-from modules.offset_agent import chains, fix_agent
+from modules.offset_agent.usd_exporter import generate_usd_from_config, generate_usd_from_scene
+from modules.offset_agent.usd_script_agent import generate_usd_file_from_prompt
 
 router = APIRouter(tags=["Offset Pre-Viz Agent"])
+JsonBody = Annotated[dict[str, Any], Body(...)]
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 VIDEO_EXTS = {".mp4", ".mov", ".webm"}
@@ -52,126 +59,64 @@ def health_check():
 @router.post("/chat", response_model=ChatResponse)
 def handle_chat_turn(request: ChatRequest):
     """
-    Handles conversational turn with model routing:
-    - Haiku: Quick clarifying questions (1-2 at a time)
-    - Sonnet: Extraction of structured scene config when sufficient detail is provided
+    Handles conversational scene design through the Offset DeepAgent flow.
     """
     try:
-        messages_dicts = [m.model_dump() for m in request.messages]
-        user_input_latest = messages_dicts[-1]["content"].lower() if messages_dicts else ""
-
-        extraction_keywords = ["confirm", "generate", "extract", "ready", "looks good", "build set", "create scene"]
-        wants_extraction = any(kw in user_input_latest for kw in extraction_keywords)
-        user_turn_count = sum(1 for m in messages_dicts if m["role"] == "user")
-
-        if wants_extraction or user_turn_count >= 3:
-            extracted_config, readable_summary = chains.run_sonnet_extraction(messages_dicts)
-            if extracted_config:
-                return ChatResponse(
-                    message="I've compiled your film set configuration based on our discussion. Please review the summary below and click **Confirm & Generate USD** to build your stage.",
-                    model_used="anthropic/claude-sonnet-4-6",
-                    ready_for_confirmation=True,
-                    scene_config=extracted_config,
-                    readable_summary=readable_summary,
-                )
-
-        haiku_reply = chains.run_haiku_clarifying(
-            messages_dicts,
-            current_config=request.current_config.model_dump() if request.current_config else None,
+        return run_offset_agent(
+            messages=request.messages,
+            current_scene=request.current_scene,
+            current_config=request.current_config,
+            model_preference=request.model_preference,
         )
-
-        return ChatResponse(
-            message=haiku_reply,
-            model_used="~anthropic/claude-haiku-latest",
-            ready_for_confirmation=False,
-            scene_config=request.current_config,
-        )
-
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - API boundary maps agent failures to HTTP 500.
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chat processing failed: {e!s}")
 
 
 @router.post("/generate-usd", response_model=GenerateUSDResponse)
 def generate_usd_stage(request: GenerateUSDRequest):
     """Generates an OpenUSD stage file (.usda/.usd) from SceneConfig."""
     try:
-        out_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "scenes"))
-        os.makedirs(out_dir, exist_ok=True)
-        out_filename = request.output_filename or "generated_set.usda"
-        out_path = os.path.join(out_dir, out_filename)
+        output_filename = request.output_filename or "generated_set.usda"
+        if request.scene:
+            response = generate_usd_from_scene(
+                scene=request.scene,
+                output_filename=output_filename,
+            )
+        else:
+            response = generate_usd_from_config(
+                scene_config=request.scene_config,
+                output_filename=output_filename,
+            )
 
-        prim_count = 0
-        try:
-            from pxr import Usd, UsdGeom, UsdPhysics, Gf
-            
-            stage = Usd.Stage.CreateNew(out_path)
-            UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-            UsdGeom.SetStageMetersPerUnit(stage, 1.0)
-            
-            world = UsdGeom.Xform.Define(stage, "/World")
-            stage.SetDefaultPrim(world.GetPrim())
-            
-            # Floor Plane with Physics Collider
-            floor = UsdGeom.Cube.Define(stage, "/World/Room/Floor")
-            floor.GetSizeAttr().Set(1.0)
-            f_xf = UsdGeom.Xformable(floor)
-            f_xf.AddTranslateOp().Set(Gf.Vec3d(0, 0, -0.05))
-            f_xf.AddScaleOp().Set(Gf.Vec3d(request.scene_config.floor.width, request.scene_config.floor.depth, 0.1))
-            floor.GetDisplayColorAttr().Set([Gf.Vec3f(0.8, 0.8, 0.82)])
-            UsdPhysics.CollisionAPI.Apply(floor.GetPrim())
-            prim_count += 1
+        if os.path.exists(response.usd_path):
+            with open(response.usd_path) as file:
+                response.usd_content = file.read()
+        return response
 
-            # Walls with Physics Colliders
-            for wall in request.scene_config.walls:
-                w_path = f"/World/Room/{wall.id}"
-                w_cube = UsdGeom.Cube.Define(stage, w_path)
-                w_cube.GetSizeAttr().Set(1.0)
-                w_xf = UsdGeom.Xformable(w_cube)
-                w_xf.AddTranslateOp().Set(Gf.Vec3d(*wall.position))
-                w_xf.AddRotateZOp().Set(wall.rotation)
-                w_xf.AddScaleOp().Set(Gf.Vec3d(wall.width, wall.thickness, wall.height))
-                w_cube.GetDisplayColorAttr().Set([Gf.Vec3f(0.75, 0.72, 0.68)])
-                UsdPhysics.CollisionAPI.Apply(w_cube.GetPrim())
-                prim_count += 1
-
-            # Shots / Cameras with Clipping & Focal Length
-            for shot in request.scene_config.shots:
-                c_path = f"/World/Cameras/{shot.shot_id}"
-                cam = UsdGeom.Camera.Define(stage, c_path)
-                cam.CreateFocalLengthAttr(shot.focal_length_mm)
-                cam.CreateHorizontalApertureAttr(36.0)
-                cam.CreateVerticalApertureAttr(24.0)
-                cam.CreateClippingRangeAttr(Gf.Vec2f(0.1, 1000.0))
-                
-                c_xf = UsdGeom.Xformable(cam)
-                c_xf.AddTranslateOp().Set(Gf.Vec3d(*shot.start_position))
-                prim_count += 1
-
-            stage.GetRootLayer().Save()
-
-        except ImportError:
-            meta_path = out_path + ".json"
-            with open(meta_path, "w") as f:
-                json.dump(request.scene_config.model_dump(), f, indent=2)
-            prim_count = len(request.scene_config.walls) + len(request.scene_config.shots) + 1
-
-        usd_content = None
-        if os.path.exists(out_path):
-            with open(out_path, "r") as f:
-                usd_content = f.read()
-
-        return GenerateUSDResponse(
-            status="SUCCESS",
-            usd_path=out_path,
-            prim_count=prim_count,
-            message=f"USD Stage generated successfully with {len(request.scene_config.walls)} walls and {len(request.scene_config.shots)} shot cameras.",
-            usd_content=usd_content,
-        )
-
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - API boundary maps exporter failures to HTTP 500.
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"USD generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"USD generation failed: {e!s}")
+
+
+@router.post("/chat-usd-file")
+def generate_usd_file_from_chat(request: USDScriptChatRequest):
+    """Generate a downloadable USDA file directly from a prompt-authored Python script."""
+    try:
+        output_filename = request.output_filename or "agent_generated.usda"
+        usd_path, _script = generate_usd_file_from_prompt(
+            prompt=request.prompt,
+            messages=request.messages,
+            output_filename=output_filename,
+        )
+        return FileResponse(
+            usd_path,
+            media_type="model/vnd.usda",
+            filename=output_filename if output_filename.endswith(".usda") else f"{output_filename}.usda",
+        )
+    except Exception as e:  # noqa: BLE001 - API boundary maps generator failures to HTTP 500.
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"USD script generation failed: {e!s}")
 
 
 # ---------------------------------------------------------------------------
@@ -207,8 +152,8 @@ def render_stage(request: RenderRequest):
     try:
         with open(usd_path, "w") as f:
             f.write(request.usd_content)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write stage file to '{usd_path}': {str(e)}")
+    except Exception as e:  # noqa: BLE001 - API boundary reports filesystem write failures.
+        raise HTTPException(status_code=500, detail=f"Failed to write stage file to '{usd_path}': {e!s}")
 
     # 3. Locate kit_render_worker.py script
     worker_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "kit_render_worker.py"))
@@ -220,7 +165,7 @@ def render_stage(request: RenderRequest):
 
     # 4. Execute subprocess with 180s timeout
     try:
-        res = subprocess.run(cmd, timeout=180, capture_output=True, text=True)
+        res = subprocess.run(cmd, timeout=180, capture_output=True, text=True, check=False)
         
         # Log stdout/stderr to render.log
         with open(log_path, "w") as f_log:
@@ -248,9 +193,9 @@ def render_stage(request: RenderRequest):
         result_data["scene_id"] = scene_id
         return result_data
 
-    except subprocess.TimeoutExpired as te:
+    except subprocess.TimeoutExpired:
         with open(log_path, "a") as f_log:
-            f_log.write(f"\n=== TIMEOUT EXPIRED (180s) ===\n")
+            f_log.write("\n=== TIMEOUT EXPIRED (180s) ===\n")
         raise HTTPException(status_code=500, detail=f"Kit Render Worker timed out after 180 seconds on scene '{scene_id}'.")
 
 
@@ -351,7 +296,7 @@ def ingest_kit_output(request: IngestKitOutputRequest):
 # ---------------------------------------------------------------------------
 
 @router.post("/parse-shot-list")
-def stub_parse_shot_list(payload: Dict[str, Any] = Body(...)):
+def stub_parse_shot_list(payload: JsonBody):
     raw_text = payload.get("text", "")
     return {
         "status": "STUB",
@@ -427,9 +372,9 @@ def propose_fix(request: ProposeFixRequest):
 
     try:
         result = fix_agent.propose_fixes(evidence)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - API boundary maps model/provider failures.
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Fix proposal failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fix proposal failed: {e!s}")
 
     fixes = result.get("fixes", []) if isinstance(result, dict) else []
 

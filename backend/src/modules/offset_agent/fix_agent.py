@@ -10,17 +10,17 @@ Provides:
   - apply_fix(scene_config: dict, fix: dict) -> dict
 """
 
-import os
 import json
+import os
 import re
-from typing import Dict, Any, List
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -115,7 +115,7 @@ def propose_fixes(evidence: dict) -> dict:
     try:
         response = chain.invoke({"evidence_json": json.dumps(evidence, indent=2)})
         return response
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - retry with raw model output parsing below.
         # Fallback heuristic parser if JsonOutputParser encounters code blocks
         raw_res = llm.invoke([
             ("system", FIX_AGENT_SYSTEM_PROMPT),

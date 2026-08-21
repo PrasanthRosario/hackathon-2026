@@ -10,17 +10,17 @@ Model Routing Rules:
 Fix proposals for physics/coverage flags live in fix_agent.py (Component F), not here.
 """
 
-import os
 import json
+import os
 import re
-from typing import Dict, Any, Tuple, Optional
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
 from modules.offset_agent.tools import OFFSET_AGENT_TOOLS
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -87,7 +87,7 @@ RULES FOR CLARIFYING QUESTIONS:
 """
 
 
-def run_haiku_clarifying(messages: list, current_config: Optional[dict] = None) -> str:
+def run_haiku_clarifying(messages: list, current_config: dict | None = None) -> str:
     """Runs the Haiku chain to ask 1-2 clarifying questions."""
     llm = get_llm("haiku", temperature=0.3)
     
@@ -153,7 +153,7 @@ Respond ONLY with valid JSON inside a ```json``` code block, followed by a human
 """
 
 
-def run_sonnet_extraction(messages: list) -> Tuple[Optional[dict], str]:
+def run_sonnet_extraction(messages: list) -> tuple[dict | None, str]:
     """Runs Sonnet chain to extract structured JSON scene config and human readable summary."""
     llm = get_llm("sonnet", temperature=0.1)
     
@@ -171,7 +171,7 @@ def run_sonnet_extraction(messages: list) -> Tuple[Optional[dict], str]:
     if json_match:
         try:
             config = json.loads(json_match.group(1))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - fallback parser preserves chat UX.
             print("Failed to parse extracted JSON:", e)
             
     summary = re.sub(r"```json.*?```", "", response, flags=re.DOTALL).strip()

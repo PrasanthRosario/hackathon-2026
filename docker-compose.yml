@@ -26,11 +26,23 @@ services:
       FILM_SET_DB_USER: postgres
       FILM_SET_DB_PASSWORD: postgres
       FILM_SET_LOG_LEVEL: DEBUG
+      OPENROUTER_API_KEY:
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    environment:
+      VITE_BACKEND_URL: http://backend:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
