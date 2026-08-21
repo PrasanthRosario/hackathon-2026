@@ -1,0 +1,37 @@
+[project]
+name = "film-set-backend"
+version = "0.1.0"
+description = "FastAPI backend for chat-driven USD film set design and simulation workflows."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "pydantic-settings>=2.4.0",
+    "psycopg[binary]>=3.2.0",
+    "sqlalchemy>=2.0.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx2>=0.28.0",
+    "pytest>=8.3.0",
+    "ruff>=0.6.0",
+]
+usd = [
+    "usd-core>=24.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["UP046", "UP047"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"

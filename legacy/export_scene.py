@@ -11,8 +11,15 @@ Usage:
 """
 
 import json
+
 from pxr import Usd, UsdGeom
-import scene_service as ss
+
+try:
+    from . import scene_service as ss
+    from .paths import DEFAULT_SCENE_DATA_PATH, DEFAULT_SET_PATH
+except ImportError:
+    import scene_service as ss
+    from paths import DEFAULT_SCENE_DATA_PATH, DEFAULT_SET_PATH
 
 SHOTS = [
     {
@@ -41,7 +48,10 @@ SHOTS = [
 ]
 
 
-def export(usda_path="set.usda", out_path="scene_data.json"):
+def export(usda_path=None, out_path=None):
+    usda_path = str(usda_path or DEFAULT_SET_PATH)
+    out_path = str(out_path or DEFAULT_SCENE_DATA_PATH)
+
     stage = Usd.Stage.Open(usda_path)
     bc = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
     xc = UsdGeom.XformCache(Usd.TimeCode.Default())
