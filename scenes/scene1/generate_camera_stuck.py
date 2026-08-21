@@ -4,7 +4,7 @@ generate_camera_stuck.py
 No generator script was checked in for the original podcast_room.usda
 (only the built file), so this opens that file directly and overwrites
 just the camera's last keyframe -- swapping its eye position for a
-point embedded inside Wall_West, while keeping the target on the desk
+point embedded inside Desk_Top, while keeping the target on the desk
 (on-set). That isolates the camera-body collision check from the
 off-set/frustum check: this shot should stay frustum-OK the whole
 time, but flag a camera_collision on the last frame.
@@ -49,12 +49,12 @@ def build():
     op = UsdGeom.Xformable(camera_prim).GetOrderedXformOps()[0]
     attr = op.GetAttr()
 
-    desk_target = (0, 0.6, 1.15)          # same desk aim as the good shot
-    wall_west_center = (-3.0, 0, 1.35)    # Wall_West's own translate -- see build script's concrete geometry
+    desk_target = (0, 0.6, 1.15)   # same desk aim as the good shot
+    desk_center = (0, 0.6, 0.75)   # Desk_Top's own translate
 
     # Only the final keyframe changes -- the dolly starts normally and
-    # overshoots into the wall right at the end.
-    attr.Set(look_at_matrix(wall_west_center, desk_target), Usd.TimeCode(end_time))
+    # overshoots straight into the desk right at the end.
+    attr.Set(look_at_matrix(desk_center, desk_target), Usd.TimeCode(end_time))
 
     stage.GetRootLayer().Save()
     print(f"Saved {OUT}")

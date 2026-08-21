@@ -314,13 +314,13 @@ def build_room(stage_path="studio_room.usda", mode="good"):
         ])
     elif mode == "camera_stuck":
         # Target stays on the host the whole time (frustum/off-set
-        # check should stay OK) but the dolly overshoots into
-        # Wall_West -- isolates the camera-body collision check from
+        # check should stay OK) but the dolly overshoots straight into
+        # Desk_Top -- isolates the camera-body collision check from
         # the off-set check so you can confirm they fire independently.
-        wall_west_center = (-room_w / 2, 0, room_h / 2)
+        desk_center = (desk_x, desk_y, desk_h)
         animate_camera_move(stage, camera.GetPrim(), [
-            (0.0, (0, seat_y - 1.9, 1.6), head_target),      # wide establishing
-            (3.0, wall_west_center, head_target),             # overshoots into the wall
+            (0.0, (0, seat_y - 1.9, 1.6), head_target),  # wide establishing
+            (3.0, desk_center, head_target),              # overshoots into the desk
         ])
     else:
         animate_camera_move(stage, camera.GetPrim(), [
