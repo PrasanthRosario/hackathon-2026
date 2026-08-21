@@ -11,8 +11,14 @@ export default function RenderView({
   kitRenderStatus,
   kitRenderResult,
   kitRenderError,
-  onProposeFix,
-  isFixing,
+  onGenerateFixReport,
+  isGeneratingReport,
+  fixReport,
+  onApplyFixReport,
+  isApplyingFix,
+  onDismissFixReport,
+  onIngestKitOutput,
+  isIngesting,
 }) {
   const [renderMode, setRenderMode] = useState('threejs');
   const isRendering = kitRenderStatus === 'rendering';
@@ -106,8 +112,14 @@ export default function RenderView({
             status={kitRenderStatus || 'idle'}
             result={kitRenderResult}
             error={kitRenderError}
-            onProposeFix={onProposeFix}
-            isFixing={isFixing}
+            onGenerateFixReport={onGenerateFixReport}
+            isGeneratingReport={isGeneratingReport}
+            fixReport={fixReport}
+            onApplyFixReport={onApplyFixReport}
+            isApplyingFix={isApplyingFix}
+            onDismissFixReport={onDismissFixReport}
+            onIngestKitOutput={onIngestKitOutput}
+            isIngesting={isIngesting}
           />
         )}
       </div>

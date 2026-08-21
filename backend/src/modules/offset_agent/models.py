@@ -95,6 +95,20 @@ class ProposeFixRequest(BaseModel):
 
 class ProposeFixResponse(BaseModel):
     status: str
+    summary: Optional[str] = Field(None, description="Director-friendly paragraph explaining the issues and the reasoning behind the proposed fixes.")
     fixes: List[Dict[str, Any]] = Field(default_factory=list)
     updated_scene_config: SceneConfigSchema
     model_used: str
+
+
+class IngestKitOutputRequest(BaseModel):
+    """
+    Ingests a pre-existing Omniverse Kit render/capture (produced by running the
+    real Kit app directly, outside kit_render_worker.py) into the same
+    renders/{scene_id}/result.json shape the rest of the pipeline expects.
+    """
+    scene_id: str = Field(..., description="Unique scene identifier for the output folder under renders/")
+    source_dir: str = Field(..., description="Absolute path on this machine where the Kit output (PNGs and/or video) lives")
+    coverage_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    physics_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    collision_flags: List[Dict[str, Any]] = Field(default_factory=list)

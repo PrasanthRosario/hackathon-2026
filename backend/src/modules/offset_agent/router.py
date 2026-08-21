@@ -6,6 +6,7 @@ Scoped cleanly under /offset prefix and root /api aliases.
 import os
 import sys
 import json
+import shutil
 import subprocess
 import traceback
 from typing import Dict, Any
@@ -21,10 +22,22 @@ from modules.offset_agent.models import (
     RenderStatusResponse,
     ProposeFixRequest,
     ProposeFixResponse,
+    IngestKitOutputRequest,
 )
 from modules.offset_agent import chains, fix_agent
 
 router = APIRouter(tags=["Offset Pre-Viz Agent"])
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
+VIDEO_EXTS = {".mp4", ".mov", ".webm"}
+
+
+def _resolve_renders_dir() -> str:
+    """EC2 ubuntu path preferred, repo root fallback. Shared by /render, /render/status, /ingest-kit-output."""
+    ubuntu_renders = "/home/ubuntu/renders"
+    if os.path.exists(ubuntu_renders) or os.access("/home/ubuntu", os.W_OK):
+        return ubuntu_renders
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "renders"))
 
 
 @router.get("/health")
@@ -186,12 +199,7 @@ def render_stage(request: RenderRequest):
     os.makedirs(scenes_dir, exist_ok=True)
     usd_path = os.path.join(scenes_dir, f"{scene_id}.usda")
 
-    ubuntu_renders = "/home/ubuntu/renders"
-    if os.path.exists(ubuntu_renders) or os.access("/home/ubuntu", os.W_OK):
-        renders_dir = ubuntu_renders
-    else:
-        renders_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "renders"))
-
+    renders_dir = _resolve_renders_dir()
     render_out_dir = os.path.join(renders_dir, scene_id)
     os.makedirs(render_out_dir, exist_ok=True)
 
@@ -255,12 +263,7 @@ def get_render_status(scene_id: str):
       - "failed" if log indicates non-zero exit or error
       - "pending" if render is still in flight
     """
-    ubuntu_renders = "/home/ubuntu/renders"
-    if os.path.exists(ubuntu_renders):
-        renders_dir = ubuntu_renders
-    else:
-        renders_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "renders"))
-
+    renders_dir = _resolve_renders_dir()
     render_out_dir = os.path.join(renders_dir, scene_id)
     result_json = os.path.join(render_out_dir, "result.json")
     log_file = os.path.join(render_out_dir, "render.log")
@@ -278,6 +281,69 @@ def get_render_status(scene_id: str):
         return RenderStatusResponse(status="pending", scene_id=scene_id, message="Kit application worker is starting/rendering stage.")
 
     return RenderStatusResponse(status="pending", scene_id=scene_id, message="Scene render request queued.")
+
+
+@router.post("/ingest-kit-output")
+def ingest_kit_output(request: IngestKitOutputRequest):
+    """
+    Ingests a pre-existing Omniverse Kit render/capture (e.g. produced by running
+    the real Kit app directly on this box, outside kit_render_worker.py) into the
+    same renders/{scene_id}/result.json shape the rest of the pipeline expects, so
+    it shows up in the Kit Render Result tab exactly like a subprocess-driven render.
+
+    Point source_dir at wherever the capture lives (a folder of PNG frames, an MP4
+    from Kit's Movie Capture extension, or both) and this copies/links the files
+    into renders/{scene_id}/ and writes a matching result.json.
+    """
+    source_dir = os.path.abspath(request.source_dir)
+    if not os.path.isdir(source_dir):
+        raise HTTPException(status_code=400, detail=f"source_dir '{source_dir}' does not exist or is not a directory.")
+
+    render_out_dir = os.path.join(_resolve_renders_dir(), request.scene_id)
+    os.makedirs(render_out_dir, exist_ok=True)
+
+    image_files, video_files = [], []
+    for entry in sorted(os.listdir(source_dir)):
+        src_path = os.path.join(source_dir, entry)
+        if not os.path.isfile(src_path):
+            continue
+        ext = os.path.splitext(entry)[1].lower()
+        if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
+            continue
+
+        dest_path = os.path.join(render_out_dir, entry)
+        if os.path.lexists(dest_path):
+            os.remove(dest_path)
+        try:
+            os.symlink(src_path, dest_path)
+        except OSError:
+            shutil.copy2(src_path, dest_path)
+
+        public_url = f"/renders/{request.scene_id}/{entry}"
+        (image_files if ext in IMAGE_EXTS else video_files).append(public_url)
+
+    if not image_files and not video_files:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No image/video files found in '{source_dir}' (looked for {sorted(IMAGE_EXTS | VIDEO_EXTS)}).",
+        )
+
+    result_data = {
+        "status": "SUCCESS",
+        "source": "kit_ingested",
+        "source_dir": source_dir,
+        "scene_id": request.scene_id,
+        "render_files": image_files,
+        "video_files": video_files,
+        "coverage_flags": request.coverage_flags,
+        "physics_flags": request.physics_flags,
+        "collision_flags": request.collision_flags,
+    }
+
+    with open(os.path.join(render_out_dir, "result.json"), "w") as f:
+        json.dump(result_data, f, indent=2)
+
+    return result_data
 
 
 # ---------------------------------------------------------------------------
@@ -373,6 +439,7 @@ def propose_fix(request: ProposeFixRequest):
 
     return ProposeFixResponse(
         status="SUCCESS",
+        summary=result.get("summary") if isinstance(result, dict) else None,
         fixes=fixes,
         updated_scene_config=updated_config,
         model_used="anthropic/claude-sonnet-4-6",

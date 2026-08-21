@@ -24,7 +24,10 @@ export default function App() {
   const [kitRenderStatus, setKitRenderStatus] = useState('idle'); // idle | rendering | done | failed
   const [kitRenderResult, setKitRenderResult] = useState(null);
   const [kitRenderError, setKitRenderError] = useState(null);
-  const [isFixing, setIsFixing] = useState(false);
+  const [fixReport, setFixReport] = useState(null); // { summary, fixes, updated_scene_config, model_used } | null
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isApplyingFix, setIsApplyingFix] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
 
   // Send conversational turn to FastAPI backend (/api/chat)
   const handleSendMessage = async (text) => {
@@ -165,17 +168,14 @@ export default function App() {
   };
 
   // POST /api/propose-fix -> Sonnet fix-proposer agent (fix_agent.py) reasons over
-  // the latest coverage/physics flags and proposes fixes from a fixed set of types.
-  // Closes the loop: apply the fixes, regenerate USD, re-render in Kit, and show
-  // whether the flags actually cleared - not just that a fix was proposed.
-  const handleProposeFixAndReverify = async () => {
+  // the latest coverage/physics flags and proposes fixes from a fixed set of types,
+  // plus a plain-language summary. This ONLY generates the report - it does not
+  // touch scene_config or trigger a re-render. The director reviews it and decides
+  // whether to apply it (handleApplyFixReport below).
+  const handleGenerateFixReport = async () => {
     if (!sceneConfig || !kitRenderResult) return;
-    setIsFixing(true);
-
-    const flagsBefore = {
-      coverage: (kitRenderResult.coverage_flags || []).length,
-      physics: (kitRenderResult.physics_flags || []).filter(f => !f.stable).length,
-    };
+    setIsGeneratingReport(true);
+    setFixReport(null);
 
     try {
       const fixRes = await fetch('/api/propose-fix', {
@@ -194,31 +194,47 @@ export default function App() {
       }
 
       const fixData = await fixRes.json();
-      const fixes = fixData.fixes || [];
+      setFixReport(fixData);
+    } catch (err) {
+      console.error('Generate fix report error:', err);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: `Fix report failed: ${err.message}`, model_used: 'error' }
+      ]);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
 
-      setSceneConfig(fixData.updated_scene_config);
+  // Applies a previously-generated fix report: mutates scene_config, regenerates
+  // USD, re-renders in Kit, and reports whether the flags actually cleared.
+  // Only runs when the director explicitly clicks "Apply & Re-render".
+  const handleApplyFixReport = async () => {
+    if (!fixReport) return;
+    setIsApplyingFix(true);
+
+    const flagsBefore = {
+      coverage: (kitRenderResult?.coverage_flags || []).length,
+      physics: (kitRenderResult?.physics_flags || []).filter(f => !f.stable).length,
+    };
+    const fixes = fixReport.fixes || [];
+
+    try {
+      setSceneConfig(fixReport.updated_scene_config);
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          content: fixes.length
-            ? `🔧 **Proposed ${fixes.length} fix(es):**\n${fixes.map(f => `- **${f.fix_type}** on \`${f.target_id}\`: ${f.rationale}`).join('\n')}\n\nRegenerating USD and re-rendering to verify...`
-            : '🔧 No fixes proposed for the current flags.',
-          model_used: fixData.model_used,
+          content: `🔧 **Applying ${fixes.length} fix(es):**\n${fixes.map(f => `- **${f.fix_type}** on \`${f.target_id}\`: ${f.rationale}`).join('\n')}\n\nRegenerating USD and re-rendering to verify...`,
+          model_used: fixReport.model_used,
         }
       ]);
 
-      if (fixes.length === 0) {
-        setIsFixing(false);
-        return;
-      }
-
-      // Re-generate USD from the fixed config, then re-render in Kit to verify.
       const usdRes = await fetch('/api/generate-usd', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          scene_config: fixData.updated_scene_config,
+          scene_config: fixReport.updated_scene_config,
           output_filename: 'generated_set.usda'
         })
       });
@@ -243,14 +259,62 @@ export default function App() {
           }
         ]);
       }
+      setFixReport(null);
     } catch (err) {
-      console.error('Propose fix error:', err);
+      console.error('Apply fix error:', err);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: `Fix loop failed: ${err.message}`, model_used: 'error' }
+        { role: 'assistant', content: `Applying the fix failed: ${err.message}`, model_used: 'error' }
       ]);
     } finally {
-      setIsFixing(false);
+      setIsApplyingFix(false);
+    }
+  };
+
+  const handleDismissFixReport = () => setFixReport(null);
+
+  // POST /api/ingest-kit-output -> pulls in a pre-existing Omniverse Kit
+  // render/capture (produced by running the real Kit app directly on the EC2
+  // box, outside kit_render_worker.py) and shows it in the Kit Render Result tab
+  // exactly like a subprocess-driven render.
+  const handleIngestKitOutput = async (sourceDir) => {
+    if (!sourceDir) return;
+    setIsIngesting(true);
+    setKitRenderStatus('rendering');
+    setKitRenderError(null);
+
+    const sceneId = `kit_ingest_${Date.now()}`;
+
+    try {
+      const response = await fetch('/api/ingest-kit-output', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scene_id: sceneId, source_dir: sourceDir })
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.detail || `Ingest failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      setKitRenderResult(data);
+      setKitRenderStatus('done');
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `📥 **Loaded real Kit output from \`${sourceDir}\`.**\n${(data.render_files || []).length} image(s), ${(data.video_files || []).length} video(s).`,
+          model_used: 'kit_ingest'
+        }
+      ]);
+    } catch (err) {
+      console.error('Ingest kit output error:', err);
+      setKitRenderError(err.message);
+      setKitRenderStatus('failed');
+    } finally {
+      setIsIngesting(false);
     }
   };
 
@@ -368,8 +432,14 @@ export default function App() {
           kitRenderStatus={kitRenderStatus}
           kitRenderResult={kitRenderResult}
           kitRenderError={kitRenderError}
-          onProposeFix={handleProposeFixAndReverify}
-          isFixing={isFixing}
+          onGenerateFixReport={handleGenerateFixReport}
+          isGeneratingReport={isGeneratingReport}
+          fixReport={fixReport}
+          onApplyFixReport={handleApplyFixReport}
+          isApplyingFix={isApplyingFix}
+          onDismissFixReport={handleDismissFixReport}
+          onIngestKitOutput={handleIngestKitOutput}
+          isIngesting={isIngesting}
         />
       </main>
     </div>

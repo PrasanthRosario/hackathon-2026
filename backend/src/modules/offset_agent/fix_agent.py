@@ -33,15 +33,37 @@ Your job is to analyze spatial coverage flags and PhysX simulation stability fla
 - add_bracing
 - add_mass
 
+IMPORTANT - ground your fix in what the render worker actually re-checks, not just what
+sounds plausible. A fix that doesn't change the value the worker inspects will show as
+UNRESOLVED on re-render, which the director will see:
+
+- Every `coverage_flags` entry from this worker (shape: shot_id, frame, edge, gap_degrees)
+  is caused SOLELY by that shot's `focal_length_mm` (the worker never reads camera position
+  or wall geometry when producing coverage flags). The ONLY fix type that can clear a
+  coverage flag on re-render is `change_lens`, raising focal_length_mm to at least 28
+  (prefer 35mm+ for a safe margin). Do NOT propose `reposition_camera` or `add_wild_wall`
+  for a coverage flag from this worker - repositioning the camera will not change the
+  flag and will fail re-verification.
+- Every `physics_flags` entry with `stable: false` is caused by the prim's path/position
+  matching a hardcoded rule (path containing "LightStandA", or height/lateral thresholds).
+  Propose `add_bracing` or `add_mass` on that `prim_id` - but note in the rationale that
+  this fix targets the physically correct cause (added stability) even though the current
+  worker build doesn't yet read bracing/mass state back into its stability check, so it may
+  still show as unresolved on re-render until that's wired up.
+
 FIX TYPE RULES:
-1. `add_wild_wall`: Use when coverage flags report an off-set void gap visible in frame (e.g. "east_gap"). Provide wall_id, position [x,y,z], width, height, thickness, rotation.
-2. `change_lens`: Use when coverage flag indicates ultra-wide distortion or edge gap. Increase focal_length_mm (e.g. 18mm -> 35mm).
-3. `reposition_camera`: Use when camera starting or ending position clips a wall or is too close (<0.5m). Shift start_position and end_position.
-4. `add_bracing` / `add_mass`: Use when physics_flags report rigid body tipping or sliding (e.g. LightStandA tipped over). Provide target_id, mass_kg or bracing_type.
+1. `change_lens`: The only reliable fix for a coverage flag from this worker. Increase focal_length_mm (>= 28, prefer 35mm+).
+2. `add_bracing` / `add_mass`: Use when physics_flags report rigid body tipping or sliding (e.g. LightStandA tipped over). Provide target_id, mass_kg or bracing_type.
+3. `reposition_camera` / `add_wild_wall`: Only propose these if a flag explicitly describes wall-clipping or an off-set void gap by name - not for the focal-length-driven coverage flags this worker produces today.
+
+This proposal is shown to a director/DP before anything is applied - they decide whether
+to accept and re-render. Write `summary` for that person: plain language, no prim paths
+or JSON jargon, explain what's wrong and what you're proposing to do about it.
 
 OUTPUT FORMAT:
 Respond with strict JSON ONLY matching this structure:
 {{
+  "summary": "2-4 sentence plain-language paragraph: what's wrong across all flags, and what fixes you're proposing to resolve them.",
   "fixes": [
     {{
       "flag_type": "coverage",
