@@ -43,6 +43,15 @@ def call_kit(action, params=None, timeout=15.0):
 
 # --- Example: what your agent's tool-calling loop does with this -----
 if __name__ == "__main__":
+    # Load a scene first. "scene": "scene1" / "scene2" are shorthands
+    # for the two checked-in demo files (see SCENE_PATHS in
+    # kit_bridge_extension.py). A dynamically-generated scene skips the
+    # shorthand and passes its own file directly:
+    #   call_kit("build_scene", {"usda_path": "/path/to/generated.usda"})
+    print("=== build_scene: scene1 ===")
+    result = call_kit("build_scene", {"scene": "scene1"})
+    print("build_scene result:", result)
+
     # GOOD SHOT: camera on the desk, framed on-set. Small move, subtle
     # on screen -- useful for confirming OK stays OK, not for a demo.
     print("=== good shot: framed on desk ===")

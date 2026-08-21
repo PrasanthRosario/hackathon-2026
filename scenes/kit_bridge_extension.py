@@ -2,8 +2,12 @@
 kit_bridge_extension.py
 
 Fully self-contained -- paste this whole file into Isaac Sim's Script
-Editor and run it. No imports from generate_podcast_room.py or any
-other project file; every function it needs lives in this one file.
+Editor and run it. It never imports a scene-generator script directly;
+"build_scene" just opens whatever .usda file it's pointed at (see
+SCENE_PATHS below), including ones the web app generates dynamically
+at runtime with plain pxr (no omni.* needed). That keeps scene
+authoring and the Kit-side bridge decoupled -- adding a new scene
+never requires touching this file.
 
 Watches a shared folder for commands from your external web app,
 executes them against the real stage, writes results back.
@@ -19,7 +23,7 @@ import omni.kit.app
 import omni.usd
 import omni.physx
 import omni.timeline
-from pxr import Usd, UsdGeom, UsdPhysics, Sdf, Gf
+from pxr import Usd, UsdGeom, Gf
 import json
 import os
 
@@ -27,6 +31,17 @@ COMMANDS_DIR = "/home/ubuntu/bridge/commands"
 RESULTS_DIR = "/home/ubuntu/bridge/results"
 os.makedirs(COMMANDS_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+
+# Scenes are authored as plain .usda files (built headlessly with pxr,
+# no omni.* needed -- see generate_podcast_room.py / generate_studio_room.py)
+# and dropped somewhere this process can read. Kit's job is just to open
+# whichever one it's told to -- it doesn't need to know how any of them
+# were built. These are shorthands for the two checked-in demo scenes;
+# a dynamically generated scene just passes its own "usda_path" instead.
+SCENE_PATHS = {
+    "scene1": "/home/ubuntu/scenes/scene1/podcast_room.usda",
+    "scene2": "/home/ubuntu/scenes/scene2/studio_room.usda",
+}
 
 
 # =======================================================================
@@ -102,97 +117,27 @@ def get_frustum_sample_dirs(cam_schema, grid=5):
 
 
 # =======================================================================
-# Scene building -- inlined, no external module
-# =======================================================================
-
-def make_box(stage, name, size, center, parent, color=None, collider=True):
-    path = f"{parent}/{name}"
-    cube = UsdGeom.Cube.Define(stage, path)
-    cube.CreateSizeAttr(1.0)
-    xf = UsdGeom.Xformable(cube)
-    xf.AddTranslateOp().Set(Gf.Vec3d(*center))
-    xf.AddScaleOp().Set(Gf.Vec3f(*size))
-    if color:
-        cube.CreateDisplayColorAttr([Gf.Vec3f(*color)])
-    if collider:
-        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
-    return cube
-
-
-def make_cyl(stage, name, parent, radius, height, center, color=None, collider=False):
-    path = f"{parent}/{name}"
-    cyl = UsdGeom.Cylinder.Define(stage, path)
-    cyl.CreateRadiusAttr(radius)
-    cyl.CreateHeightAttr(height)
-    cyl.CreateAxisAttr(UsdGeom.Tokens.z)
-    UsdGeom.Xformable(cyl).AddTranslateOp().Set(Gf.Vec3d(*center))
-    if color:
-        cyl.CreateDisplayColorAttr([Gf.Vec3f(*color)])
-    if collider:
-        UsdPhysics.CollisionAPI.Apply(cyl.GetPrim())
-    return cyl
-
-
-def build_podcast_room(stage, room_w=6.0, room_d=5.0, room_h=2.7, gap_w=1.1):
-    """Rebuilds the room shell + desk + off-set void on the given stage."""
-    world = stage.GetPrimAtPath("/World")
-    if not world:
-        world = UsdGeom.Xform.Define(stage, "/World")
-        stage.SetDefaultPrim(world.GetPrim())
-
-    wall_t = 0.1
-    boundary_path = "/World/SetBoundary"
-    boundary = UsdGeom.Xform.Define(stage, boundary_path)
-    boundary.GetPrim().CreateAttribute("is_set_boundary", Sdf.ValueTypeNames.Bool).Set(True)
-
-    concrete = (0.55, 0.55, 0.55)
-    make_box(stage, "Floor", (room_w, room_d, wall_t), (0, 0, -wall_t / 2), boundary_path, color=concrete)
-    make_box(stage, "Wall_North", (room_w, wall_t, room_h), (0, room_d / 2, room_h / 2), boundary_path, color=concrete)
-    make_box(stage, "Wall_South", (room_w, wall_t, room_h), (0, -room_d / 2, room_h / 2), boundary_path, color=concrete)
-    make_box(stage, "Wall_West", (wall_t, room_d, room_h), (-room_w / 2, 0, room_h / 2), boundary_path, color=concrete)
-
-    seg_d = (room_d - gap_w) / 2
-    make_box(stage, "Wall_East_A", (wall_t, seg_d, room_h), (room_w / 2, gap_w / 2 + seg_d / 2, room_h / 2), boundary_path, color=concrete)
-    make_box(stage, "Wall_East_B", (wall_t, seg_d, room_h), (room_w / 2, -(gap_w / 2 + seg_d / 2), room_h / 2), boundary_path, color=concrete)
-
-    void_path = "/World/Backstage_Void"
-    void = UsdGeom.Xform.Define(stage, void_path)
-    void.GetPrim().CreateAttribute("is_off_set", Sdf.ValueTypeNames.Bool).Set(True)
-    make_box(stage, "VoidPlane", (4.0, gap_w, room_h), (room_w / 2 + 2.0, 0, room_h / 2),
-             void_path, color=(0.9, 0.1, 0.1), collider=False)
-
-    desk_w, desk_d, desk_h, desk_top_t = 1.6, 0.7, 0.75, 0.05
-    desk_x, desk_y = 0, 0.6
-    make_box(stage, "Desk_Top", (desk_w, desk_d, desk_top_t), (desk_x, desk_y, desk_h),
-             "/World/SetDressing", color=(0.35, 0.22, 0.12))
-
-    camera_path = "/World/MainCamera"
-    if not stage.GetPrimAtPath(camera_path):
-        camera = UsdGeom.Camera.Define(stage, camera_path)
-        camera.CreateFocalLengthAttr(35.0)
-        camera.CreateHorizontalApertureAttr(36.0)
-        camera.CreateVerticalApertureAttr(24.0)
-        camera.CreateClippingRangeAttr(Gf.Vec2f(0.1, 8.0))
-        point_camera_at(camera.GetPrim(), (0, desk_y - desk_d / 2 - 1.3, 1.35), (0, desk_y, 1.15))
-
-    return {"room_w": room_w, "room_d": room_d, "room_h": room_h, "desk_center": [desk_x, desk_y, desk_h]}
-
-
-# =======================================================================
 # Bridge actions
 # =======================================================================
 
 def action_build_scene(params):
-    stage = omni.usd.get_context().get_stage()
-    info = build_podcast_room(
-        stage,
-        room_w=params.get("room_w", 6.0),
-        room_d=params.get("room_d", 5.0),
-        room_h=params.get("room_h", 2.7),
-        gap_w=params.get("gap_w", 1.1),
-    )
-    stage.GetRootLayer().Save()
-    return {"status": "ok", "scene_info": info}
+    """Opens a .usda as the live stage. "usda_path" takes any file --
+    including one the web app just generated on the fly with plain pxr
+    (no omni.* needed) and dropped somewhere this process can read.
+    "scene": "scene1" / "scene2" is just a shorthand for the two
+    checked-in demo files in SCENE_PATHS. Kit never needs to know how
+    a scene was built, only where the file is."""
+    usda_path = params.get("usda_path") or SCENE_PATHS.get(params.get("scene", ""))
+    if not usda_path:
+        return {"status": "error", "message": "pass 'usda_path' or a known 'scene' name"}
+    if not os.path.isfile(usda_path):
+        return {"status": "error", "message": f"usda not found: {usda_path}"}
+
+    context = omni.usd.get_context()
+    if not context.open_stage(usda_path):
+        return {"status": "error", "message": f"failed to open stage: {usda_path}"}
+
+    return {"status": "ok", "usda_path": usda_path}
 
 
 def action_move_camera(params):
