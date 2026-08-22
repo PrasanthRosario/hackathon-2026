@@ -132,11 +132,14 @@ def build_mannequin(stage, parent, seat_pos, skin_mat, shirt_mat):
     neck_z = hip_z + torso_h
     make_cyl(stage, "Neck", parent, 0.05, 0.06, (x, y, neck_z + 0.03), material=skin_mat)
     make_sphere(stage, "Head", parent, 0.11, (x, y, neck_z + 0.17), material=skin_mat)
-    # Upper legs, seated (horizontal-ish)
+    # Upper legs, seated (horizontal-ish). Offsets are POSITIVE y (same
+    # forward direction the arms use below) since the person faces +y
+    # toward the desk -- knees/shins need to extend the same way the
+    # forearms do, not backward through the chair.
     for side, sign in [("L", -1), ("R", 1)]:
-        make_cyl(stage, f"Thigh_{side}", parent, 0.09, 0.42, (x + sign * 0.11, y - 0.15, hip_z),
+        make_cyl(stage, f"Thigh_{side}", parent, 0.09, 0.42, (x + sign * 0.11, y + 0.15, hip_z),
                  material=shirt_mat, rotate_xyz=(90, 0, 0))
-        make_cyl(stage, f"Shin_{side}", parent, 0.07, 0.42, (x + sign * 0.11, y - 0.36, hip_z - 0.21),
+        make_cyl(stage, f"Shin_{side}", parent, 0.07, 0.42, (x + sign * 0.11, y + 0.36, hip_z - 0.21),
                  material=shirt_mat)
     # Arms, resting toward desk
     for side, sign in [("L", -1), ("R", 1)]:

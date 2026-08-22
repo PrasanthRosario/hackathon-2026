@@ -780,7 +780,7 @@ def Xform "World"
             rel material:binding = </World/Materials/Shirt>
             double radius = 0.09
             float3 xformOp:rotateXYZ = (90, 0, 0)
-            double3 xformOp:translate = (-0.11, -0.45000000000000007, 0.56)
+            double3 xformOp:translate = (-0.11, -0.15000000000000005, 0.56)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
         }
 
@@ -792,7 +792,7 @@ def Xform "World"
             double height = 0.42
             rel material:binding = </World/Materials/Shirt>
             double radius = 0.07
-            double3 xformOp:translate = (-0.11, -0.66, 0.3500000000000001)
+            double3 xformOp:translate = (-0.11, 0.05999999999999994, 0.3500000000000001)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
 
@@ -805,7 +805,7 @@ def Xform "World"
             rel material:binding = </World/Materials/Shirt>
             double radius = 0.09
             float3 xformOp:rotateXYZ = (90, 0, 0)
-            double3 xformOp:translate = (0.11, -0.45000000000000007, 0.56)
+            double3 xformOp:translate = (0.11, -0.15000000000000005, 0.56)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
         }
 
@@ -817,7 +817,7 @@ def Xform "World"
             double height = 0.42
             rel material:binding = </World/Materials/Shirt>
             double radius = 0.07
-            double3 xformOp:translate = (0.11, -0.66, 0.3500000000000001)
+            double3 xformOp:translate = (0.11, 0.05999999999999994, 0.3500000000000001)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
 
