@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offset Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+*{margin:0;padding:0}
+
+:root{
+  --bg:#E9EBEF; --surface:#FFFFFF; --surface-2:#F2F4F7; --surface-3:#E3E6EC;
+  --ink:#14171D; --ink-2:#525A69; --ink-3:#7B8494;
+  --line:#C6CBD5; --line-2:#DDE1E8;
+  --beam:#A85C05; --beam-tint:#FBF0DF; --beam-edge:#E3B776; --on-beam:#FFFFFF;
+  --sim:#0C7A72; --flag:#BE2A30; --ok:#2C7B44;
+  --shadow:0 1px 2px rgba(20,23,29,.06), 0 8px 24px -12px rgba(20,23,29,.18);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1015; --surface:#161A21; --surface-2:#1B2029; --surface-3:#222834;
+    --ink:#E7EAF0; --ink-2:#98A1B0; --ink-3:#727C8C;
+    --line:#2E3542; --line-2:#242A34;
+    --beam:#F0A445; --beam-tint:#26190A; --beam-edge:#7A5520; --on-beam:#171009;
+    --sim:#3FC0AF; --flag:#F26066; --ok:#54C46F;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1015; --surface:#161A21; --surface-2:#1B2029; --surface-3:#222834;
+  --ink:#E7EAF0; --ink-2:#98A1B0; --ink-3:#727C8C;
+  --line:#2E3542; --line-2:#242A34;
+  --beam:#F0A445; --beam-tint:#26190A; --beam-edge:#7A5520; --on-beam:#171009;
+  --sim:#3FC0AF; --flag:#F26066; --ok:#54C46F;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:400 15px/1.6 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:44px 24px 96px; display:flex; flex-direction:column; gap:40px}
+
+/* ---------- header ---------- */
+.eyebrow{
+  font:600 11px/1 "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3); margin:0;
+}
+h1{
+  font:700 clamp(38px,6vw,60px)/0.95 "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+  letter-spacing:-.015em; text-transform:uppercase; margin:14px 0 0; text-wrap:balance;
+}
+.lede{max-width:62ch; margin:16px 0 0; color:var(--ink-2); font-size:17px}
+.lede b{color:var(--ink); font-weight:600}
+.meta{
+  display:flex; flex-wrap:wrap; gap:8px; margin-top:22px;
+  font:500 11px/1 "IBM Plex Mono", monospace; letter-spacing:.06em;
+}
+.meta span{
+  border:1px solid var(--line); border-radius:999px; padding:7px 12px;
+  color:var(--ink-2); background:var(--surface);
+}
+
+/* ---------- theme switch ---------- */
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap}
+.themectl{
+  display:inline-flex; align-items:center; gap:2px; padding:3px;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:999px;
+}
+.themectl button{
+  display:inline-flex; align-items:center; gap:6px;
+  font:600 10px/1 "IBM Plex Mono", monospace; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-3); background:none; border:none; border-radius:999px;
+  padding:7px 12px; cursor:pointer; transition:background .18s, color .18s;
+}
+.themectl button:hover{color:var(--ink)}
+.themectl button[aria-pressed="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.themectl svg{flex:none; width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round}
+
+/* ---------- section chrome ---------- */
+section{display:flex; flex-direction:column; gap:18px}
+h2{
+  font:700 13px/1 "IBM Plex Mono", monospace; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-2); margin:0;
+  padding-bottom:12px; border-bottom:1px solid var(--line);
+}
+h3{font:600 17px/1.3 "IBM Plex Sans", sans-serif; margin:0; text-wrap:balance}
+p{margin:0}
+
+/* ---------- diagram card ---------- */
+.stage{
+  background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.scenarios{
+  display:flex; flex-wrap:wrap; gap:8px; padding:16px;
+  border-bottom:1px solid var(--line-2); background:var(--surface-2);
+}
+.sc{
+  font:500 12.5px/1 "IBM Plex Sans", sans-serif; color:var(--ink-2);
+  background:var(--surface); border:1px solid var(--line); border-radius:8px;
+  padding:10px 13px; cursor:pointer; display:flex; align-items:center; gap:9px;
+  transition:border-color .18s, color .18s, background .18s;
+}
+.sc .num{font:600 10px/1 "IBM Plex Mono", monospace; color:var(--ink-3); letter-spacing:.05em}
+.sc:hover{border-color:var(--beam-edge); color:var(--ink)}
+.sc[aria-pressed="true"]{background:var(--beam-tint); border-color:var(--beam); color:var(--ink); font-weight:600}
+.sc[aria-pressed="true"] .num{color:var(--beam)}
+
+.canvas{padding:18px 16px 6px; overflow-x:auto}
+svg.diagram{display:block; width:100%; min-width:940px; height:auto}
+
+/* ---------- svg tokens ---------- */
+.grp .gbox{fill:var(--surface-2); stroke:var(--line); stroke-width:1.2; stroke-dasharray:5 4}
+.grp .gbox.sim{stroke:var(--sim)}
+.glabel{font:600 10px "IBM Plex Mono", monospace; letter-spacing:.13em; fill:var(--ink-3)}
+.glabel.sim{fill:var(--sim)}
+.nbox{fill:var(--surface); stroke:var(--line); stroke-width:1.2}
+.nt{font:600 12.5px "IBM Plex Sans", sans-serif; fill:var(--ink)}
+.ns{font:400 9.8px "IBM Plex Mono", monospace; fill:var(--ink-3)}
+.el{font:500 10px "IBM Plex Mono", monospace; fill:var(--ink-3)}
+.actor .nbox{fill:var(--surface-3); stroke:var(--line)}
+
+.edge{fill:none; stroke:var(--line); stroke-width:1.6; marker-end:url(#ah)}
+.eg.bi .edge{marker-start:url(#ah)}
+.eg.loop .edge{stroke-dasharray:6 5; stroke:var(--beam-edge)}
+.eg.loop .el{fill:var(--beam)}
+
+.node,.eg,.grp{transition:opacity .3s ease}
+.nbox,.edge{transition:stroke .25s ease, fill .25s ease, stroke-width .25s ease}
+.nt,.ns,.el{transition:fill .25s ease}
+
+.node.on .nbox{stroke:var(--beam); stroke-width:2.2; fill:var(--beam-tint)}
+.node.on .nt{fill:var(--beam)}
+.node.on .ns{fill:var(--ink-2)}
+.grp.on .gbox{stroke:var(--beam)}
+.eg.on .edge{stroke:var(--beam); stroke-width:2.6; marker-end:url(#ah-on); stroke-dasharray:6 7; animation:flow .68s linear infinite}
+.eg.bi.on .edge{marker-start:url(#ah-on)}
+.eg.on .el{fill:var(--beam)}
+@keyframes flow{to{stroke-dashoffset:-13}}
+svg.focus .node:not(.on),svg.focus .eg:not(.on),svg.focus .grp:not(.on){opacity:.3}
+
+/* ---------- transport ---------- */
+.transport{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  padding:14px 16px; border-top:1px solid var(--line-2); background:var(--surface-2);
+}
+button{font-family:inherit}
+.tb{
+  font:500 12.5px/1 "IBM Plex Sans", sans-serif; color:var(--ink);
+  background:var(--surface); border:1px solid var(--line); border-radius:7px;
+  padding:9px 13px; cursor:pointer; transition:border-color .18s, background .18s;
+}
+.tb:hover:not(:disabled){border-color:var(--beam-edge)}
+.tb:disabled{opacity:.4; cursor:not-allowed}
+.tb.primary{background:var(--beam); border-color:var(--beam); color:var(--on-beam); font-weight:600; min-width:82px}
+.spacer{flex:1}
+.speed{display:flex; align-items:center; gap:7px; font:500 11px/1 "IBM Plex Mono", monospace; color:var(--ink-3); letter-spacing:.06em}
+select{
+  font:500 11px/1 "IBM Plex Mono", monospace; color:var(--ink); background:var(--surface);
+  border:1px solid var(--line); border-radius:6px; padding:8px 8px; cursor:pointer;
+}
+.counter{
+  font:600 12px/1 "IBM Plex Mono", monospace; color:var(--ink-2);
+  letter-spacing:.08em; font-variant-numeric:tabular-nums;
+  border:1px solid var(--line); border-radius:6px; padding:9px 11px; background:var(--surface);
+}
+:focus-visible{outline:2px solid var(--beam); outline-offset:2px; border-radius:4px}
+
+/* ---------- readout ---------- */
+.readout{
+  padding:20px 16px; border-top:1px solid var(--line-2);
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,320px); gap:24px; align-items:start;
+}
+.readout .lbl{font:600 10px/1 "IBM Plex Mono", monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3)}
+.readout h3{margin:9px 0 7px}
+.readout p{color:var(--ink-2); font-size:14.5px; max-width:60ch}
+.payload[hidden]{display:none}
+.payload{
+  margin-top:14px; display:inline-block; max-width:100%; overflow-x:auto;
+  font:500 12px/1.5 "IBM Plex Mono", monospace; color:var(--beam);
+  background:var(--beam-tint); border:1px solid var(--beam-edge);
+  border-radius:7px; padding:8px 11px; white-space:pre;
+}
+ol.steps{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
+ol.steps button{
+  width:100%; text-align:left; display:flex; gap:11px; align-items:baseline;
+  background:none; border:none; border-radius:6px; cursor:pointer; padding:7px 9px;
+  font:400 12.5px/1.45 "IBM Plex Sans", sans-serif; color:var(--ink-2);
+  border-left:2px solid transparent; transition:background .16s, color .16s;
+}
+ol.steps button:hover{background:var(--surface-2); color:var(--ink)}
+ol.steps button .n{font:600 10px "IBM Plex Mono", monospace; color:var(--ink-3); font-variant-numeric:tabular-nums}
+ol.steps li.cur button{background:var(--beam-tint); color:var(--ink); font-weight:500; border-left-color:var(--beam)}
+ol.steps li.cur button .n{color:var(--beam)}
+
+/* ---------- legend ---------- */
+.legend{display:flex; flex-wrap:wrap; gap:10px 26px; padding:14px 16px; border-top:1px solid var(--line-2); background:var(--surface-2)}
+.legend div{display:flex; align-items:center; gap:9px; font:500 11.5px/1 "IBM Plex Mono", monospace; color:var(--ink-3); letter-spacing:.03em}
+.legend svg{flex:none}
+
+/* ---------- tables & cards ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; min-width:620px; font-size:14px}
+th{
+  text-align:left; font:600 10px/1 "IBM Plex Mono", monospace; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3); padding:14px 16px; border-bottom:1px solid var(--line);
+  background:var(--surface-2); white-space:nowrap;
+}
+td{padding:14px 16px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+td:first-child{color:var(--ink); font:500 13px/1.5 "IBM Plex Mono", monospace; white-space:nowrap}
+td.who{white-space:nowrap; font-size:13.5px}
+
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px}
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:18px; display:flex; flex-direction:column; gap:10px;
+}
+.card .tag{font:600 10px/1 "IBM Plex Mono", monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3)}
+.card.simcard .tag{color:var(--sim)}
+.card p{color:var(--ink-2); font-size:14px}
+.card ul{margin:0; padding-left:17px; color:var(--ink-2); font-size:13.5px; display:flex; flex-direction:column; gap:5px}
+.card code{font:500 12px "IBM Plex Mono", monospace; color:var(--ink); background:var(--surface-2); padding:1px 5px; border-radius:4px}
+
+footer{
+  border-top:1px solid var(--line); padding-top:22px; color:var(--ink-3);
+  font:400 13px/1.6 "IBM Plex Sans", sans-serif; display:flex; flex-direction:column; gap:6px;
+}
+footer b{color:var(--ink-2); font-weight:600}
+
+/* ---------- fullscreen (presenter view) ---------- */
+.stage.full{
+  position:fixed; inset:0; z-index:9999; margin:0;
+  width:100vw; height:100vh; max-height:100vh;
+  border:none; border-radius:0; box-shadow:none;
+  display:grid; overflow:hidden;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr) auto auto;
+  grid-template-areas:"tabs" "canvas" "transport" "side";
+}
+.stage.full .scenarios{grid-area:tabs; padding:13px 20px}
+.stage.full .canvas{
+  grid-area:canvas; min-height:0; padding:14px 20px;
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.stage.full svg.diagram{width:100%; height:100%; min-width:0; max-width:100%}
+.stage.full .transport{grid-area:transport; padding:12px 20px; border-top:1px solid var(--line-2)}
+.stage.full .legend{display:none}
+
+/* compact readout strip */
+.stage.full .readout{
+  grid-area:side; padding:14px 20px; gap:22px; align-items:center;
+  grid-template-columns:minmax(0,1fr) auto; max-height:28vh; overflow:hidden;
+  border-top:1px solid var(--line-2); background:var(--surface-2);
+}
+.stage.full .readout p{max-width:none; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.stage.full .readout h3{margin:7px 0 5px}
+.stage.full .payload{margin-top:10px}
+.stage.full ol.steps{flex-direction:row; flex-wrap:wrap; gap:6px; max-width:320px; justify-content:flex-end}
+.stage.full ol.steps button{
+  width:34px; height:34px; padding:0; justify-content:center; align-items:center;
+  border:1px solid var(--line); border-left-width:1px; border-radius:7px; background:var(--surface);
+}
+.stage.full ol.steps button span:last-child{display:none}
+.stage.full ol.steps li.cur button{border-color:var(--beam); background:var(--beam-tint); color:var(--beam)}
+
+/* wide displays get the full step list as a side rail */
+@media (min-width:1500px){
+  .stage.full{
+    grid-template-columns:minmax(0,1fr) 340px;
+    grid-template-rows:auto minmax(0,1fr) auto;
+    grid-template-areas:"tabs side" "canvas side" "transport side";
+  }
+  .stage.full .readout{
+    display:flex; flex-direction:column; align-items:stretch; gap:18px;
+    max-height:none; overflow-y:auto; padding:18px 22px;
+    border-top:none; border-left:1px solid var(--line-2);
+  }
+  .stage.full .readout p{-webkit-line-clamp:none; display:block}
+  .stage.full ol.steps{flex-direction:column; flex-wrap:nowrap; max-width:none; justify-content:flex-start; gap:2px}
+  .stage.full ol.steps button{
+    width:100%; height:auto; padding:7px 9px; justify-content:flex-start;
+    border:none; border-left:2px solid transparent; border-radius:6px; background:none;
+  }
+  .stage.full ol.steps button span:last-child{display:inline}
+  .stage.full ol.steps li.cur button{background:var(--beam-tint); border-left-color:var(--beam)}
+}
+@media (max-height:560px){
+  .stage.full .readout{display:none}
+  .stage.full{grid-template-rows:auto minmax(0,1fr) auto; grid-template-areas:"tabs" "canvas" "transport"}
+}
+body.locked{overflow:hidden}
+.fshint{
+  font:500 10.5px/1 "IBM Plex Mono", monospace; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3); align-self:center;
+}
+.stage:not(.full) .fshint{display:none}
+
+@media (max-width:860px){
+  .readout{grid-template-columns:1fr}
+  .wrap{padding:32px 16px 72px; gap:32px}
+}
+@media (prefers-reduced-motion:reduce){
+  .eg.on .edge{animation:none; stroke-dasharray:none}
+  *{transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+<header>
+  <div class="topbar">
+    <p class="eyebrow">Presidio · Hackathon 2026 · System design</p>
+    <div class="themectl" id="themectl" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-set="auto" aria-pressed="true">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5"></circle><path d="M8 3v10"></path></svg>Auto</button>
+      <button type="button" data-theme-set="light" aria-pressed="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2"></circle><path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"></path></svg>Light</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.8 5.8 0 1 0 7 7Z"></path></svg>Dark</button>
+    </div>
+  </div>
+  <h1>Offset Architecture</h1>
+  <p class="lede">Offset lets a director design a film set by talking to an agent, watch it build live in the browser, then run the planned camera move through a <b>physics engine</b> before anyone builds anything. The simulator doesn't render a picture of the set and guess. It casts real rays through the camera frustum against real collision meshes, and a second agent turns what it finds into fixes the director can apply.</p>
+  <div class="meta">
+    <span>OpenUSD</span><span>NVIDIA Omniverse Kit</span><span>PhysX</span><span>Three.js</span><span>FastAPI</span><span>Two LLM agents</span>
+  </div>
+</header>
+
+<section>
+  <h2>The system, end to end</h2>
+  <p class="lede" style="font-size:15px;margin:0">Pick a flow to watch data move through it. Each step lights the components it touches and names the payload crossing the wire.</p>
+
+  <div class="stage">
+    <div class="scenarios" id="scenarios" role="group" aria-label="Choose a flow"></div>
+
+    <div class="canvas">
+<svg class="diagram" id="dg" viewBox="0 0 1280 510" role="img" aria-label="Offset architecture: a director works in a browser web app that talks to a FastAPI backend, which calls two LLM agents and dispatches USD stages to an NVIDIA Omniverse Kit GPU host for PhysX validation and RTX capture, with results looping back to the browser.">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="var(--line)"></path>
+    </marker>
+    <marker id="ah-on" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="5.4" markerHeight="5.4" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="var(--beam)"></path>
+    </marker>
+  </defs>
+
+  <!-- group containers -->
+  <g class="grp" id="g-web">
+    <rect class="gbox" x="236" y="210" width="260" height="208" rx="12"></rect>
+    <text class="glabel" x="250" y="234">BROWSER · REACT + THREE.JS</text>
+  </g>
+  <g class="grp" id="g-api">
+    <rect class="gbox" x="600" y="210" width="260" height="208" rx="12"></rect>
+    <text class="glabel" x="614" y="234">BACKEND · FASTAPI</text>
+  </g>
+  <g class="grp" id="g-gpu">
+    <rect class="gbox sim" x="964" y="210" width="268" height="208" rx="12"></rect>
+    <text class="glabel sim" x="978" y="234">GPU HOST · OMNIVERSE KIT</text>
+  </g>
+
+  <!-- edges -->
+  <g class="eg" id="e-brief">
+    <path class="edge" d="M136 270 L232 270"></path>
+    <text class="el" x="184" y="260" text-anchor="middle">set brief</text>
+  </g>
+  <g class="eg" id="e-review">
+    <path class="edge" d="M232 378 L136 378"></path>
+    <text class="el" x="184" y="368" text-anchor="middle">review</text>
+  </g>
+  <g class="eg" id="e-req">
+    <path class="edge" d="M500 270 L596 270"></path>
+    <text class="el" x="548" y="260" text-anchor="middle">REST / JSON</text>
+  </g>
+  <g class="eg" id="e-res">
+    <path class="edge" d="M596 378 L500 378"></path>
+    <text class="el" x="548" y="360" text-anchor="middle">scene_config</text>
+    <text class="el" x="548" y="371" text-anchor="middle">report + media</text>
+  </g>
+  <g class="eg bi" id="e-design">
+    <path class="edge" d="M652 206 L652 106"></path>
+    <text class="el" x="661" y="152">brief ↔ scene</text>
+  </g>
+  <g class="eg bi" id="e-validate">
+    <path class="edge" d="M830 206 L830 106"></path>
+    <text class="el" x="839" y="152">flags ↔ fix report</text>
+  </g>
+  <g class="eg" id="e-sim">
+    <path class="edge" d="M864 270 L960 270"></path>
+    <text class="el" x="912" y="249" text-anchor="middle">set.usda</text>
+    <text class="el" x="912" y="260" text-anchor="middle">+ shot list</text>
+  </g>
+  <g class="eg" id="e-out">
+    <path class="edge" d="M960 378 L864 378"></path>
+    <text class="el" x="912" y="358" text-anchor="middle">video · frames</text>
+    <text class="el" x="912" y="369" text-anchor="middle">+ flags</text>
+  </g>
+  <g class="eg loop" id="e-loop">
+    <path class="edge" d="M730 418 L730 456 Q730 470 716 470 L380 470 Q366 470 366 456 L366 424"></path>
+    <text class="el" x="548" y="488" text-anchor="middle">apply fix → regenerate stage → re-run the same checks</text>
+  </g>
+
+  <!-- nodes -->
+  <g class="node actor" id="n-director">
+    <rect class="nbox" x="24" y="248" width="108" height="152" rx="9"></rect>
+    <text class="nt" x="78" y="318" text-anchor="middle">Director</text>
+    <text class="ns" x="78" y="334" text-anchor="middle">previz / art dept</text>
+  </g>
+
+  <g class="node" id="n-chat">
+    <rect class="nbox" x="252" y="248" width="228" height="44" rx="8"></rect>
+    <text class="nt" x="266" y="267">Chat Panel</text>
+    <text class="ns" x="266" y="281">brief · clarify · approve</text>
+  </g>
+  <g class="node" id="n-view">
+    <rect class="nbox" x="252" y="302" width="228" height="44" rx="8"></rect>
+    <text class="nt" x="266" y="321">3D Set Viewport</text>
+    <text class="ns" x="266" y="335">Three.js live preview</text>
+  </g>
+  <g class="node" id="n-review">
+    <rect class="nbox" x="252" y="356" width="228" height="44" rx="8"></rect>
+    <text class="nt" x="266" y="375">Review Panel</text>
+    <text class="ns" x="266" y="389">video · issues · fixes</text>
+  </g>
+
+  <g class="node" id="n-orch">
+    <rect class="nbox" x="616" y="248" width="228" height="44" rx="8"></rect>
+    <text class="nt" x="630" y="267">Orchestrator</text>
+    <text class="ns" x="630" y="281">/chat /usd /render /fix</text>
+  </g>
+  <g class="node" id="n-usd">
+    <rect class="nbox" x="616" y="302" width="228" height="44" rx="8"></rect>
+    <text class="nt" x="630" y="321">USD Builder</text>
+    <text class="ns" x="630" y="335">pxr.Usd → set.usda</text>
+  </g>
+  <g class="node" id="n-store">
+    <rect class="nbox" x="616" y="356" width="228" height="44" rx="8"></rect>
+    <text class="nt" x="630" y="375">Artifact Store</text>
+    <text class="ns" x="630" y="389">stages · renders · results</text>
+  </g>
+
+  <g class="node" id="n-load">
+    <rect class="nbox" x="980" y="248" width="236" height="44" rx="8"></rect>
+    <text class="nt" x="994" y="267">Stage Loader</text>
+    <text class="ns" x="994" y="281">opens the USD stage</text>
+  </g>
+  <g class="node" id="n-physx">
+    <rect class="nbox" x="980" y="302" width="236" height="44" rx="8"></rect>
+    <text class="nt" x="994" y="321">PhysX Validator</text>
+    <text class="ns" x="994" y="335">frustum raycasts · collisions</text>
+  </g>
+  <g class="node" id="n-rtx">
+    <rect class="nbox" x="980" y="356" width="236" height="44" rx="8"></rect>
+    <text class="nt" x="994" y="375">RTX Render + Capture</text>
+    <text class="ns" x="994" y="389">frames → MP4</text>
+  </g>
+
+  <g class="node" id="n-agent-design">
+    <rect class="nbox" x="570" y="28" width="164" height="74" rx="9"></rect>
+    <text class="nt" x="584" y="54">Set Design Agent</text>
+    <text class="ns" x="584" y="70">LLM · brief → scene</text>
+    <text class="ns" x="584" y="84">clarify, then extract</text>
+  </g>
+  <g class="node" id="n-agent-val">
+    <rect class="nbox" x="748" y="28" width="164" height="74" rx="9"></rect>
+    <text class="nt" x="762" y="54">Validation Agent</text>
+    <text class="ns" x="762" y="70">LLM · flags → fixes</text>
+    <text class="ns" x="762" y="84">grounded in re-checks</text>
+  </g>
+</svg>
+    </div>
+
+    <div class="transport">
+      <button class="tb" id="prev" type="button">◀ Prev</button>
+      <button class="tb primary" id="play" type="button">Play</button>
+      <button class="tb" id="next" type="button">Next ▶</button>
+      <button class="tb" id="stop" type="button">Stop</button>
+      <div class="spacer"></div>
+      <div class="speed">
+        <label for="spd">PACE</label>
+        <select id="spd">
+          <option value="1000">1.0s / step</option>
+          <option value="1800" selected>1.8s / step</option>
+          <option value="3000">3.0s / step</option>
+        </select>
+      </div>
+      <div class="counter" id="counter">·· / ··</div>
+      <button class="tb" id="fs" type="button" aria-pressed="false">⤢ Fullscreen</button>
+      <span class="fshint">Esc to exit</span>
+    </div>
+
+    <div class="readout">
+      <div>
+        <p class="lbl" id="rlabel">No flow selected</p>
+        <h3 id="rtitle">Pick a flow above to step through the system</h3>
+        <p id="rdesc">The static diagram shows every component and the channels between them. Choosing a flow walks one path through it, lighting the parts that participate and naming what crosses each hop.</p>
+        <div class="payload" id="rpayload" hidden></div>
+      </div>
+      <ol class="steps" id="steplist"></ol>
+    </div>
+
+    <div class="legend">
+      <div><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="26" y2="5" stroke="var(--line)" stroke-width="1.8"></line><path d="M26 1.5 L33 5 L26 8.5 Z" fill="var(--line)"></path></svg> one-way call</div>
+      <div><svg width="40" height="10" aria-hidden="true"><line x1="8" y1="5" x2="32" y2="5" stroke="var(--line)" stroke-width="1.8"></line><path d="M8 1.5 L1 5 L8 8.5 Z" fill="var(--line)"></path><path d="M32 1.5 L39 5 L32 8.5 Z" fill="var(--line)"></path></svg> call and return</div>
+      <div><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="26" y2="5" stroke="var(--beam-edge)" stroke-width="1.8" stroke-dasharray="6 5"></line><path d="M26 1.5 L33 5 L26 8.5 Z" fill="var(--beam-edge)"></path></svg> iteration loop</div>
+      <div><svg width="22" height="12" aria-hidden="true"><rect x="1" y="1" width="20" height="10" rx="3" fill="none" stroke="var(--sim)" stroke-width="1.4" stroke-dasharray="4 3"></rect></svg> GPU / simulation boundary</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What actually crosses the wire</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Payload</th><th class="who">Written by</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>scene_config</td>
+          <td class="who">Set Design Agent</td>
+          <td>Room dimensions, props, lighting, camera placement and its move. One typed object. The browser preview and the USD builder read the same schema, so the preview can never drift from what gets simulated.</td>
+        </tr>
+        <tr>
+          <td>set.usda</td>
+          <td class="who">USD Builder</td>
+          <td>A real OpenUSD stage: geometry with collision meshes, an off-set marker on anything outside the built space, and a camera whose move is baked as time samples.</td>
+        </tr>
+        <tr>
+          <td>result.json</td>
+          <td class="who">GPU host</td>
+          <td>Rendered frame paths, the captured video, and machine-readable findings: coverage flags, physics flags, and camera-collision flags with the exact frame, frustum corner and prim involved.</td>
+        </tr>
+        <tr>
+          <td>fix report</td>
+          <td class="who">Validation Agent</td>
+          <td>A plain-language summary, the issues found, what fixing each one buys the shot, and a list of typed fixes the backend knows how to apply: <code>change_lens</code>, <code>reposition_camera</code>, <code>add_wild_wall</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Components</h2>
+  <div class="cards">
+    <div class="card">
+      <p class="tag">Browser</p>
+      <h3>Web app</h3>
+      <p>The whole director-facing surface. Chat, live 3D preview and the review panel sit side by side so a change and its consequence are visible at once.</p>
+      <ul>
+        <li>React app, single page</li>
+        <li>Three.js renders <code>scene_config</code> directly: walls, props, dolly path, camera frustum</li>
+        <li>Review panel plays the simulation video against the flagged frames</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="tag">Service</p>
+      <h3>Backend orchestrator</h3>
+      <p>The only component that talks to everything else. Holds the thread, owns the scene, and decides when to call a model versus the GPU host.</p>
+      <ul>
+        <li>FastAPI: <code>/chat</code>, <code>/generate-usd</code>, <code>/render</code>, <code>/propose-fix</code></li>
+        <li>Authors USD with <code>pxr.Usd</code> rather than emitting text</li>
+        <li>Keys every stage, render and report to one <code>scene_id</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="tag">Reasoning</p>
+      <h3>Set Design Agent</h3>
+      <p>Turns a sentence into a scene graph. Asks for what is missing first; only emits structure once the brief is complete.</p>
+      <ul>
+        <li>Cheap fast model for clarifying turns, stronger model for extraction</li>
+        <li>Output is the typed <code>scene_config</code>, never free text the renderer has to parse</li>
+      </ul>
+    </div>
+    <div class="card simcard">
+      <p class="tag">GPU host</p>
+      <h3>Omniverse Kit runtime</h3>
+      <p>One USD stage serves the scene graph, the physics and the renderer. Nothing is exported between tools, so the thing being validated is the thing being shown.</p>
+      <ul>
+        <li>PhysX casts four frustum-corner rays per sampled frame against real collision meshes</li>
+        <li>Flags rays that reach past the built set, and rig geometry the camera would hit</li>
+        <li>RTX renders the move; frames captured to video</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="tag">Reasoning</p>
+      <h3>Validation Agent</h3>
+      <p>Reads the run and writes the report. Constrained to fixes the simulator can actually re-check, so a proposed fix is a testable claim rather than a plausible sentence.</p>
+      <ul>
+        <li>Input: flags plus the scene they came from</li>
+        <li>Output: summary, issues, benefits, typed fixes</li>
+        <li>Read-only: nothing is applied until the director says so</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="tag">Loop</p>
+      <h3>Fix and re-verify</h3>
+      <p>The part that makes the tool trustworthy: a fix is applied, the stage is rebuilt, and the identical checks run again so the before / after count is real.</p>
+      <ul>
+        <li>Fixes mutate <code>scene_config</code>, then USD is regenerated, never patched</li>
+        <li>A fix that fails to clear its flag is reported unresolved, not dropped</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p><b>Design intent.</b> Two boundaries carry the weight of this architecture. The first is the schema boundary: <code style="font:500 12px 'IBM Plex Mono',monospace">scene_config</code> is the only description of the set, so the preview, the USD stage and the validator can never disagree about what is being built. The second is the process boundary at the GPU host: reasoning happens outside it, physics happens inside it, and only files cross.</p>
+  <p>Offset · Presidio Hackathon 2026 · target architecture</p>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  const FLOWS = [
+    { id:'design', name:'Design the set', steps:[
+      { t:'Director describes the shot', d:'A brief in plain language: the space, who is in it, and what the camera does. No 3D tool, no measurements.', p:'"small podcast room, one guest, slow dolly-in on the desk"', n:['n-director','n-chat'], e:['e-brief'] },
+      { t:'The turn reaches the orchestrator', d:'Each message is posted with the thread so far and the scene as it currently stands.', p:'POST /chat  { thread, scene_config }', n:['n-chat','n-orch'], e:['e-req'] },
+      { t:'Set Design Agent picks up the thread', d:'A fast model asks for whatever the brief is missing. Once it is complete, a stronger model takes over and extracts structure.', p:'clarify → extract', n:['n-orch','n-agent-design'], e:['e-design'] },
+      { t:'The agent emits a scene graph', d:'Room, props, lighting, camera placement and its move, as one typed object rather than prose a renderer has to interpret.', p:'scene_config { room, props, lighting, camera, move }', n:['n-agent-design'], e:[] },
+      { t:'The scene returns to the browser', d:'The same schema the backend will later turn into USD, so preview and build cannot diverge.', p:'200  scene_config', n:['n-orch','n-chat'], e:['e-res'] },
+      { t:'Three.js redraws the set live', d:'Walls, floor, props, the dolly path and the camera frustum, updated on every turn, so the director sees the consequence of each sentence.', p:'walls · props · dolly path · frustum', n:['n-view'], e:[] },
+      { t:'Iterate until it reads right', d:'Conversation and preview stay in one loop. Nothing has been built or simulated yet, so changes are free.', p:'next turn', n:['n-director','n-chat','n-view'], e:['e-review','e-brief'] }
+    ]},
+    { id:'usd', name:'Freeze to USD', steps:[
+      { t:'Director approves the set', d:'The preview is signed off. Only now does the scene become a real stage.', p:'approve  scene_config', n:['n-director','n-view'], e:['e-review'] },
+      { t:'Browser requests a USD build', d:'The approved scene is sent back for authoring.', p:'POST /generate-usd  { scene_config }', n:['n-chat','n-orch'], e:['e-req'] },
+      { t:'USD Builder authors the stage', d:'Real USD prims through pxr: geometry, transforms, collision meshes, and an off-set marker on anything outside the built space.', p:'pxr.Usd → set.usda', n:['n-usd'], e:[] },
+      { t:'The camera move is baked in', d:'The dolly is written as time samples on the USD camera, so the simulator plays the exact planned move rather than an approximation of it.', p:'time-sampled xform · frames 0–72', n:['n-usd'], e:[] },
+      { t:'The stage lands in the store', d:'Keyed by scene_id, so every later render, flag and report points at one stage.', p:'stages/{scene_id}/set.usda', n:['n-store'], e:[] },
+      { t:'Stage text returns with the response', d:'The browser holds the USD without a second round trip, ready to dispatch a run.', p:'usd_content + scene_id', n:['n-orch','n-review'], e:['e-res'] }
+    ]},
+    { id:'sim', name:'Simulate and capture', steps:[
+      { t:'Browser triggers the run', d:'One request starts validation and rendering together.', p:'POST /render  { scene_id, shots }', n:['n-chat','n-orch'], e:['e-req'] },
+      { t:'Stage and shot list cross to the GPU host', d:'The process boundary: reasoning stays behind, only files go forward.', p:'set.usda + shot list', n:['n-orch','n-load'], e:['e-sim'] },
+      { t:'Kit opens the stage', d:'One USD stage feeds the scene graph, the physics and the renderer, with no export step between them.', p:'omni.usd  open_stage', n:['n-load'], e:[] },
+      { t:'PhysX casts the frustum, frame by frame', d:'Four corner rays per sampled frame against real collision meshes. This is the differentiator: a physics query, not frustum math on paper.', p:'raycast × 4 corners × N frames', n:['n-physx'], e:[] },
+      { t:'Off-set views and collisions are flagged', d:'Rays that reach past the built set, and rig geometry the camera would physically hit on the way through the move.', p:'{ frame, corner, prim }', n:['n-physx'], e:[] },
+      { t:'RTX renders the move and captures it', d:'The same stage rendered frame by frame and written out as video the director can actually watch.', p:'frames → MP4', n:['n-rtx'], e:[] },
+      { t:'Media and findings come back together', d:'Renders, video and machine-readable flags return as one result and land in the store.', p:'result.json { renders, video, flags }', n:['n-rtx','n-store'], e:['e-out'] }
+    ]},
+    { id:'report', name:'Validate and report', steps:[
+      { t:'Orchestrator assembles the findings', d:'Raw flags plus the scene they came from, so the reasoning has something to reason about.', p:'flags + scene_config', n:['n-store','n-orch'], e:[] },
+      { t:'Validation Agent reads the run', d:'Constrained to fixes the simulator can actually re-check, so what it proposes is a testable claim.', p:'POST /propose-fix', n:['n-orch','n-agent-val'], e:['e-validate'] },
+      { t:'The agent writes the report', d:'A plain-language summary, the issues found, what fixing each one buys the shot, and typed fixes the backend knows how to apply.', p:'{ summary, issues, benefits, fixes[] }', n:['n-agent-val'], e:[] },
+      { t:'Report and media return to the browser', d:'Read-only by design: nothing has changed in the scene at this point.', p:'fix report + video', n:['n-orch','n-review'], e:['e-res'] },
+      { t:'Review panel shows the run', d:'Simulation playback beside the flagged frames, the issues, the benefits and the recommended fixes.', p:'video · issues · benefits · fixes', n:['n-review'], e:[] },
+      { t:'Director reads and decides', d:'Accept a fix, dismiss it, or go back to the chat and redesign the set outright.', p:'accept | dismiss', n:['n-review','n-director'], e:['e-review'] }
+    ]},
+    { id:'fix', name:'Apply a fix and re-verify', steps:[
+      { t:'Director accepts a fix', d:'An explicit action. The agent never rewrites the scene on its own.', p:'apply  { change_lens: 35mm }', n:['n-director','n-review'], e:['e-review'] },
+      { t:'The fix mutates the scene', d:'A typed fix edits scene_config, the single source the preview and the USD builder both read.', p:"scene_config'", n:['n-orch'], e:['e-loop'] },
+      { t:'The stage is rebuilt, not patched', d:'USD is regenerated from the corrected scene, so the stage cannot drift away from the description.', p:"set.usda'", n:['n-usd','n-store'], e:[] },
+      { t:'Kit re-runs the identical checks', d:'Same shot list, same validation. That is what makes the comparison honest.', p:'re-render + re-validate', n:['n-load','n-physx','n-rtx'], e:['e-sim'] },
+      { t:'Flag counts compared before and after', d:'A fix that fails to clear its flag is reported unresolved rather than quietly dropped.', p:'flags  1 → 0', n:['n-store','n-orch'], e:['e-out'] },
+      { t:'Before / after posted back to chat', d:'The loop closes where it started, and the director can go around again.', p:'"north_top coverage cleared · 1 → 0"', n:['n-chat','n-view','n-review'], e:['e-res'] }
+    ]}
+  ];
+
+  const GROUP_OF = {
+    'n-chat':'g-web','n-view':'g-web','n-review':'g-web',
+    'n-orch':'g-api','n-usd':'g-api','n-store':'g-api',
+    'n-load':'g-gpu','n-physx':'g-gpu','n-rtx':'g-gpu'
+  };
+
+  const svg = document.getElementById('dg');
+  const tabs = document.getElementById('scenarios');
+  const list = document.getElementById('steplist');
+  const counter = document.getElementById('counter');
+  const rlabel = document.getElementById('rlabel');
+  const rtitle = document.getElementById('rtitle');
+  const rdesc = document.getElementById('rdesc');
+  const rpayload = document.getElementById('rpayload');
+  const bPrev = document.getElementById('prev');
+  const bNext = document.getElementById('next');
+  const bPlay = document.getElementById('play');
+  const bStop = document.getElementById('stop');
+  const spd = document.getElementById('spd');
+  const bFs = document.getElementById('fs');
+  const stage = document.querySelector('.stage');
+
+  let flow = null, idx = -1, timer = null;
+
+  FLOWS.forEach(function(f, i){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'sc'; b.dataset.id = f.id;
+    b.setAttribute('aria-pressed','false');
+    b.innerHTML = '<span class="num">0' + (i+1) + '</span>' + f.name;
+    b.addEventListener('click', function(){ selectFlow(f.id, true); });
+    tabs.appendChild(b);
+  });
+
+  function clearHighlight(){
+    svg.classList.remove('focus');
+    svg.querySelectorAll('.on').forEach(function(el){ el.classList.remove('on'); });
+  }
+
+  function paint(){
+    clearHighlight();
+    if(!flow || idx < 0) return;
+    const s = flow.steps[idx];
+    svg.classList.add('focus');
+    const groups = {};
+    s.n.forEach(function(id){
+      const el = document.getElementById(id);
+      if(el) el.classList.add('on');
+      if(GROUP_OF[id]) groups[GROUP_OF[id]] = true;
+    });
+    s.e.forEach(function(id){
+      const el = document.getElementById(id);
+      if(el) el.classList.add('on');
+    });
+    Object.keys(groups).forEach(function(g){
+      const el = document.getElementById(g);
+      if(el) el.classList.add('on');
+    });
+  }
+
+  function render(){
+    if(!flow){
+      counter.textContent = '·· / ··';
+      list.innerHTML = '';
+      rlabel.textContent = 'No flow selected';
+      rtitle.textContent = 'Pick a flow above to step through the system';
+      rdesc.textContent = 'The static diagram shows every component and the channels between them. Choosing a flow walks one path through it, lighting the parts that participate and naming what crosses each hop.';
+      rpayload.hidden = true;
+      bPrev.disabled = bNext.disabled = true;
+      clearHighlight();
+      return;
+    }
+    const n = flow.steps.length;
+    counter.textContent = String(idx + 1).padStart(2,'0') + ' / ' + String(n).padStart(2,'0');
+    const s = flow.steps[idx];
+    rlabel.textContent = flow.name + ' · step ' + (idx + 1);
+    rtitle.textContent = s.t;
+    rdesc.textContent = s.d;
+    rpayload.hidden = false;
+    rpayload.textContent = s.p;
+    bPrev.disabled = idx === 0;
+    bNext.disabled = idx === n - 1;
+    Array.prototype.forEach.call(list.children, function(li, i){
+      li.classList.toggle('cur', i === idx);
+    });
+    paint();
+  }
+
+  function buildList(){
+    list.innerHTML = '';
+    flow.steps.forEach(function(s, i){
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.innerHTML = '<span class="n">' + String(i+1).padStart(2,'0') + '</span><span>' + s.t + '</span>';
+      b.addEventListener('click', function(){ pause(); idx = i; render(); });
+      li.appendChild(b); list.appendChild(li);
+    });
+  }
+
+  function selectFlow(id, autoplay){
+    pause();
+    flow = FLOWS.find(function(f){ return f.id === id; });
+    idx = 0;
+    Array.prototype.forEach.call(tabs.children, function(b){
+      b.setAttribute('aria-pressed', String(b.dataset.id === id));
+    });
+    buildList();
+    render();
+    if(autoplay) play();
+  }
+
+  function tick(){
+    if(!flow) return;
+    if(idx >= flow.steps.length - 1){ pause(); return; }
+    idx++; render();
+  }
+
+  function play(){
+    if(!flow) selectFlow(FLOWS[0].id, false);
+    if(idx >= flow.steps.length - 1) idx = 0;
+    render();
+    clearInterval(timer);
+    timer = setInterval(tick, parseInt(spd.value, 10));
+    bPlay.textContent = 'Pause';
+  }
+
+  function pause(){
+    clearInterval(timer); timer = null;
+    bPlay.textContent = 'Play';
+  }
+
+  bPlay.addEventListener('click', function(){ timer ? pause() : play(); });
+  bNext.addEventListener('click', function(){ pause(); if(flow && idx < flow.steps.length - 1){ idx++; render(); } });
+  bPrev.addEventListener('click', function(){ pause(); if(flow && idx > 0){ idx--; render(); } });
+  bStop.addEventListener('click', function(){
+    pause(); flow = null; idx = -1;
+    Array.prototype.forEach.call(tabs.children, function(b){ b.setAttribute('aria-pressed','false'); });
+    render();
+  });
+  spd.addEventListener('change', function(){ if(timer){ play(); } });
+
+  /* ---------- fullscreen ---------- */
+  function isFull(){ return stage.classList.contains('full'); }
+
+  function syncFs(){
+    const on = isFull();
+    bFs.textContent = on ? '⤡ Exit fullscreen' : '⤢ Fullscreen';
+    bFs.setAttribute('aria-pressed', String(on));
+    document.body.classList.toggle('locked', on);
+  }
+
+  function enterFs(){
+    stage.classList.add('full');
+    syncFs();
+    if(stage.requestFullscreen){
+      stage.requestFullscreen().catch(function(){ /* sandboxed: the CSS overlay already covers it */ });
+    } else if(stage.webkitRequestFullscreen){
+      try{ stage.webkitRequestFullscreen(); }catch(e){}
+    }
+  }
+
+  function exitFs(){
+    stage.classList.remove('full');
+    syncFs();
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if(fsEl){
+      if(document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
+      else if(document.webkitExitFullscreen){ try{ document.webkitExitFullscreen(); }catch(e){} }
+    }
+  }
+
+  bFs.addEventListener('click', function(){ isFull() ? exitFs() : enterFs(); });
+
+  let nativeOn = false;
+  function onFsChange(){
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if(fsEl === stage){ nativeOn = true; return; }
+    if(nativeOn){ nativeOn = false; stage.classList.remove('full'); syncFs(); }
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  document.addEventListener('keydown', function(ev){
+    if(ev.key === 'Escape' && isFull()){ exitFs(); return; }
+    if(!isFull()) return;
+    if(ev.key === 'ArrowRight'){ ev.preventDefault(); bNext.click(); }
+    else if(ev.key === 'ArrowLeft'){ ev.preventDefault(); bPrev.click(); }
+    else if(ev.key === ' '){ ev.preventDefault(); bPlay.click(); }
+  });
+
+  /* ---------- theme switch ---------- */
+  const themectl = document.getElementById('themectl');
+  const root = document.documentElement;
+  function setTheme(mode){
+    if(mode === 'auto'){ root.removeAttribute('data-theme'); }
+    else { root.setAttribute('data-theme', mode); }
+    Array.prototype.forEach.call(themectl.children, function(b){
+      b.setAttribute('aria-pressed', String(b.dataset.themeSet === mode));
+    });
+  }
+  themectl.addEventListener('click', function(ev){
+    const b = ev.target.closest('button[data-theme-set]');
+    if(b) setTheme(b.dataset.themeSet);
+  });
+  setTheme(root.getAttribute('data-theme') || 'auto');
+
+  render();
+  syncFs();
+})();
+</script>
+
+</body>
+</html>
