@@ -5,7 +5,7 @@ language, the set builds live in the browser, and the camera move is checked
 with real physics — PhysX collisions and an RTX render on the same USD stage —
 *before* anything gets built for real.
 
-`OpenUSD` · `NVIDIA Omniverse Kit` · `PhysX` · `Three.js` · `FastAPI` · Two LLM agents
+`OpenUSD` · `NVIDIA Omniverse Kit` · `PhysX` · `React` · `FastAPI` · Two LLM agents
 
 Built for **Presidio Hackathon 2026**.
 
@@ -20,13 +20,15 @@ build, by running the same physics engine that would catch it on the day.
 ## How it works
 
 1. **Talk** — describe the shot in the chat panel, no 3D tool required.
-2. **Watch** — a Three.js preview builds live in the browser, off the same
-   `scene_config` schema the backend uses to author USD — the preview can
-   never drift from what gets simulated.
-3. **Verify** — the scene is built as a real `.usda` stage and checked in
-   NVIDIA Omniverse Kit: PhysX casts frustum-corner rays against real
-   collision meshes to flag off-set shots and rig/camera collisions, and RTX
-   renders the move for review.
+2. **Generate** — the agent emits a typed `scene_config`, which the backend
+   turns into a real `.usda` stage; the browser shows the generated USD file
+   and the cameras it contains (there's no live 3D preview in the browser
+   today — that's the biggest gap between this build and the target
+   architecture in `docs/architecture.html`, see Current status below).
+3. **Verify** — the stage is checked in NVIDIA Omniverse Kit: PhysX casts
+   frustum-corner rays against real collision meshes to flag off-set shots
+   and rig/camera collisions, and RTX renders the move for review — results
+   land back in the browser as frames/video plus a flag list.
 4. **Fix and re-verify** — a validation agent reads the flags and proposes
    typed, testable fixes (never free text). Nothing is applied until the
    director approves; once applied, the stage is rebuilt and the identical
@@ -36,7 +38,7 @@ build, by running the same physics engine that would catch it on the day.
 
 | Component | Role |
 |---|---|
-| **Web app** | React + Three.js. Chat, live 3D preview, and the review panel side by side, so a change and its consequence are visible at once. |
+| **Web app** | React. Chat panel, generated-USD/camera panel, and the render/validate review panel side by side. No live 3D preview yet — see Current status. |
 | **Backend orchestrator** | FastAPI (`/chat`, `/generate-usd`, `/render`, `/propose-fix`). The only component that talks to everything else — holds the conversation thread, owns the scene, authors USD with `pxr.Usd`, and keys every stage/render/report to one `scene_id`. |
 | **Set Design Agent** | Turns a sentence into a scene graph. Asks clarifying questions first; only emits the typed `scene_config` once the brief is complete — never free text the renderer has to parse. |
 | **Omniverse Kit runtime** | One USD stage serves the scene graph, physics, and the renderer — nothing is exported between tools, so the thing being validated is the thing being shown. |
@@ -44,10 +46,11 @@ build, by running the same physics engine that would catch it on the day.
 | **Fix & re-verify loop** | Applies a fix by mutating `scene_config`, regenerates USD, and re-runs the same checks — a fix that fails to clear its flag is reported unresolved, not silently dropped. |
 
 **Design intent:** two boundaries carry this architecture. The schema
-boundary — `scene_config` is the only description of the set, so preview, USD
-stage, and validator can never disagree about what's being built. And the
-process boundary at the GPU host — reasoning happens outside it, physics
-happens inside it, and only files cross.
+boundary — `scene_config` is the only description of the set, so the USD
+stage and the validator can never disagree about what's being built (this is
+also meant to extend to a live browser preview — not yet built, see Current
+status). And the process boundary at the GPU host — reasoning happens
+outside it, physics happens inside it, and only files cross.
 
 For the full interactive system diagram (data payloads, per-flow walkthroughs,
 go-to-market), open [docs/architecture.html](docs/architecture.html) in a
@@ -58,7 +61,7 @@ versus still a placeholder — see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ```
 backend/          FastAPI orchestrator + chat/set-design/fix agents (backend/src/modules/offset_agent)
-ui/                React + Three.js web app
+ui/                React web app
 kit_render_worker.py   Subprocess invoked by the backend to render/validate a .usda in Kit
 scenes/            Sample .usda stages, Isaac Sim scripts, and the Kit bridge extension
 docs/              Interactive architecture diagram (docs/architecture.html)
@@ -94,12 +97,16 @@ Run `make help` for all available targets (tests, lint, Docker build/teardown).
 
 ## Current status
 
-Chat → live preview → USD generation → Kit render/validate → fix report →
-apply & re-verify is wired end-to-end and verified live for coverage-flag
-fixes (e.g. a flagged shot resolved by a lens change, confirmed 1 → 0 on
-re-render). A few things are still open — see
-[ARCHITECTURE.md](ARCHITECTURE.md) for the full list:
+Chat → USD generation → Kit render/validate → fix report → apply & re-verify
+is wired end-to-end and verified live for coverage-flag fixes (e.g. a flagged
+shot resolved by a lens change, confirmed 1 → 0 on re-render). A few things
+are still open — see [ARCHITECTURE.md](ARCHITECTURE.md) for the full list:
 
+- **No live 3D preview in the browser yet.** `ui/src/components/ThreeCanvas.jsx`
+  exists but isn't wired into the app — `docs/architecture.html`'s own
+  technical diagram labels this panel "NO 3D PREVIEW," matching the current
+  code. The web app shows the generated USD file/cameras and, after a run,
+  the Kit render output — not a live scene as the shot is described.
 - Physics-flag fixes (bracing/mass) don't yet visibly resolve — the worker's
   physics check doesn't read the metadata a fix would add.
 - The real Kit/Replicator RTX path is written but largely unexercised outside
