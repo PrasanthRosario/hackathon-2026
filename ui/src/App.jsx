@@ -40,7 +40,9 @@ export default function App() {
   const [fixReportSource, setFixReportSource] = useState(null); // 'validate_simulate' | null
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isApplyingFix, setIsApplyingFix] = useState(false);
-  const [chatMode, setChatMode] = useState('preview');
+  // 'preview' mode's toggle button is commented out in LeftPanel.jsx (Three.js
+  // preview deprioritized) -- default straight to the usd_script_agent pipeline.
+  const [chatMode, setChatMode] = useState('usd-file');
 
   // Cameras actually present in the current USD file (parsed server-side via
   // pxr, not assumed from the in-memory scene -- some USDs have no camera at

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import ThreeCanvas from './ThreeCanvas';
+// Three.js live preview is deprioritized in favor of the usd_script_agent +
+// Validate & Simulate (Isaac Sim) pipeline -- commented out, not deleted, in
+// case it's needed again.
+// import ThreeCanvas from './ThreeCanvas';
 import ValidateSimulateResultView from './ValidateSimulateResultView';
-import { Box, Layers, Loader2, ShieldCheck, Download } from 'lucide-react';
+import { Layers, Loader2, ShieldCheck, Download } from 'lucide-react';
 
 export default function RenderView({
   sceneConfig,
@@ -27,7 +30,7 @@ export default function RenderView({
   isLoadingCameras,
   cameraListError,
 }) {
-  const [renderMode, setRenderMode] = useState('threejs');
+  const [renderMode, setRenderMode] = useState('validate_result');
   const isValidating = validateStatus === 'queued' || validateStatus === 'running';
   const propCount = sceneSpec?.objects?.filter(
     obj => !['floor', 'wall', 'ceiling'].includes(obj.kind)
@@ -70,13 +73,14 @@ export default function RenderView({
             VIEWPORT SEAM:
           </span>
 
-          <button
+          {/* Three.js Live Preview tab -- commented out, see import above */}
+          {/* <button
             className={`ph-btn ph-btn-sm ${renderMode === 'threejs' ? 'ph-btn-primary' : ''}`}
             onClick={() => setRenderMode('threejs')}
           >
             <Box size={13} />
             Three.js Live Preview
-          </button>
+          </button> */}
 
           <button
             className={`ph-btn ph-btn-sm ${renderMode === 'validate_result' ? 'ph-btn-primary' : ''}`}
@@ -139,9 +143,9 @@ export default function RenderView({
 
       {/* Main Render Area */}
       <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-        {renderMode === 'threejs' && (
+        {/* {renderMode === 'threejs' && (
           <ThreeCanvas sceneConfig={sceneConfig} sceneSpec={sceneSpec} />
-        )}
+        )} */}
 
         {renderMode === 'validate_result' && (
           <ValidateSimulateResultView

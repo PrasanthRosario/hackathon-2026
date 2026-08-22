@@ -124,15 +124,16 @@ export default function LeftPanel({
         </span>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: '1fr',
           gap: '4px',
           padding: '4px',
           backgroundColor: '#0F172A',
           border: '1px solid var(--border-subtle)',
           borderRadius: '8px',
-          width: '250px'
+          width: '125px'
         }}>
-          <button
+          {/* Preview mode toggle -- commented out, chat is USD File-only for now */}
+          {/* <button
             type="button"
             className={`ph-btn ph-btn-sm ${chatMode === 'preview' ? 'ph-btn-primary' : ''}`}
             style={{ padding: '5px 8px', fontSize: '11.5px' }}
@@ -140,7 +141,7 @@ export default function LeftPanel({
           >
             <Box size={13} />
             Preview
-          </button>
+          </button> */}
           <button
             type="button"
             className={`ph-btn ph-btn-sm ${chatMode === 'usd-file' ? 'ph-btn-yellow' : ''}`}
