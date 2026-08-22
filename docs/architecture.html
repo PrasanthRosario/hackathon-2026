@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Offset Architecture</title>
+<title>Off-frame — Previz, Verified</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -12,50 +12,100 @@
 *{margin:0;padding:0}
 
 :root{
-  --bg:#E9EBEF; --surface:#FFFFFF; --surface-2:#F2F4F7; --surface-3:#E3E6EC;
-  --ink:#14171D; --ink-2:#525A69; --ink-3:#7B8494;
-  --line:#C6CBD5; --line-2:#DDE1E8;
-  --beam:#A85C05; --beam-tint:#FBF0DF; --beam-edge:#E3B776; --on-beam:#FFFFFF;
-  --sim:#0C7A72; --flag:#BE2A30; --ok:#2C7B44;
-  --shadow:0 1px 2px rgba(20,23,29,.06), 0 8px 24px -12px rgba(20,23,29,.18);
+  /* Off Frame app palette (light) -- derived from ui/src/index.css's slate/orange system */
+  --bg:#F1F3F6; --surface:#FFFFFF; --surface-2:#F8FAFC; --surface-3:#E2E8F0;
+  --ink:#0F172A; --ink-2:#475569; --ink-3:#94A3B8;
+  --line:#E2E8F0; --line-2:#EDF1F5;
+  --beam:#D9480F; --beam-tint:#FDECE3; --beam-edge:#F3B18C; --on-beam:#FFFFFF;
+  --sim:#0E9F6E; --flag:#BE2A30; --ok:#0E9F6E;
+  --shadow:0 1px 2px rgba(15,23,42,.06), 0 8px 24px -12px rgba(15,23,42,.16);
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --bg:#0D1015; --surface:#161A21; --surface-2:#1B2029; --surface-3:#222834;
-    --ink:#E7EAF0; --ink-2:#98A1B0; --ink-3:#727C8C;
-    --line:#2E3542; --line-2:#242A34;
-    --beam:#F0A445; --beam-tint:#26190A; --beam-edge:#7A5520; --on-beam:#171009;
-    --sim:#3FC0AF; --flag:#F26066; --ok:#54C46F;
+    /* Off Frame app palette (dark) -- exact tokens from ui/src/index.css */
+    --bg:#0B0F17; --surface:#151D2A; --surface-2:#1E293B; --surface-3:#243447;
+    --ink:#F8FAFC; --ink-2:#94A3B8; --ink-3:#64748B;
+    --line:#334155; --line-2:#1F2937;
+    --beam:#F54E00; --beam-tint:#2A150C; --beam-edge:#7A3216; --on-beam:#FFFFFF;
+    --sim:#10B981; --flag:#F26066; --ok:#10B981;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0D1015; --surface:#161A21; --surface-2:#1B2029; --surface-3:#222834;
-  --ink:#E7EAF0; --ink-2:#98A1B0; --ink-3:#727C8C;
-  --line:#2E3542; --line-2:#242A34;
-  --beam:#F0A445; --beam-tint:#26190A; --beam-edge:#7A5520; --on-beam:#171009;
-  --sim:#3FC0AF; --flag:#F26066; --ok:#54C46F;
+  --bg:#0B0F17; --surface:#151D2A; --surface-2:#1E293B; --surface-3:#243447;
+  --ink:#F8FAFC; --ink-2:#94A3B8; --ink-3:#64748B;
+  --line:#334155; --line-2:#1F2937;
+  --beam:#F54E00; --beam-tint:#2A150C; --beam-edge:#7A3216; --on-beam:#FFFFFF;
+  --sim:#10B981; --flag:#F26066; --ok:#10B981;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.7);
 }
 
 *{box-sizing:border-box}
+html,body{height:100%}
 body{
-  margin:0; background:var(--bg); color:var(--ink);
+  margin:0; background:var(--bg); color:var(--ink); overflow:hidden;
   font:400 15px/1.6 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:1180px; margin:0 auto; padding:44px 24px 96px; display:flex; flex-direction:column; gap:40px}
 
-/* ---------- header ---------- */
+/* ---------- deck shell ---------- */
+.deck{height:100vh; height:100dvh; display:flex; flex-direction:column}
+.deckbar{
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:14px 24px; border-bottom:1px solid var(--line); background:var(--surface);
+  flex:none;
+}
+.deck-brand{
+  font:600 11px/1 "IBM Plex Mono", monospace; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-3); white-space:nowrap;
+}
+.deck-progress{flex:1; height:3px; background:var(--surface-3); border-radius:99px; overflow:hidden; min-width:60px}
+.deck-progress i{display:block; height:100%; background:var(--beam); border-radius:99px; transition:width .28s ease}
+.deck-controls{display:flex; align-items:center; gap:8px; flex:none}
+.deck-count{
+  font:600 12px/1 "IBM Plex Mono", monospace; letter-spacing:.06em; color:var(--ink-2);
+  font-variant-numeric:tabular-nums; min-width:52px; text-align:center;
+}
+.deckbtn{
+  font:500 12.5px/1 "IBM Plex Sans", sans-serif; color:var(--ink);
+  background:var(--surface); border:1px solid var(--line); border-radius:7px;
+  padding:8px 12px; cursor:pointer; transition:border-color .18s, background .18s;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.deckbtn:hover:not(:disabled){border-color:var(--beam-edge)}
+.deckbtn:disabled{opacity:.35; cursor:not-allowed}
+.deckbtn.primary{background:var(--beam); border-color:var(--beam); color:var(--on-beam); font-weight:600}
+.deckdots{display:flex; align-items:center; gap:5px; flex:none}
+.deckdots button{
+  width:7px; height:7px; padding:0; border-radius:99px; border:none; cursor:pointer;
+  background:var(--line); transition:background .18s, transform .18s;
+}
+.deckdots button[aria-current="true"]{background:var(--beam); transform:scale(1.35)}
+
+/* ---------- slides ---------- */
+.slides{flex:1; min-height:0; position:relative; perspective:1200px}
+.slide{
+  position:absolute; inset:0; overflow-y:auto; overflow-x:hidden;
+  padding:44px 24px 56px; opacity:0; pointer-events:none;
+  display:flex; flex-direction:column;
+  transform:translateY(22px) scale(.97);
+  transition:opacity .5s cubic-bezier(.16,1,.3,1), transform .5s cubic-bezier(.16,1,.3,1);
+}
+.slide.active{opacity:1; pointer-events:auto; transform:translateY(0) scale(1); z-index:1}
+.slide-inner{max-width:1180px; margin:0 auto; width:100%; flex:none; display:flex; flex-direction:column; gap:32px}
+.slide-hero{max-width:1180px; margin:0 auto; width:100%; flex:1; display:flex; flex-direction:column; justify-content:center; gap:28px; padding:20px 0}
+
+/* ---------- header / hero text ---------- */
 .eyebrow{
   font:600 11px/1 "IBM Plex Mono", ui-monospace, monospace;
-  letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3); margin:0;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--beam); margin:0;
 }
 h1{
   font:700 clamp(38px,6vw,60px)/0.95 "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
   letter-spacing:-.015em; text-transform:uppercase; margin:14px 0 0; text-wrap:balance;
 }
-.lede{max-width:62ch; margin:16px 0 0; color:var(--ink-2); font-size:17px}
+.lede{max-width:68ch; margin:16px 0 0; color:var(--ink-2); font-size:17px}
+.lede.big{font-size:20px; max-width:56ch}
 .lede b{color:var(--ink); font-weight:600}
 .meta{
   display:flex; flex-wrap:wrap; gap:8px; margin-top:22px;
@@ -66,8 +116,54 @@ h1{
   color:var(--ink-2); background:var(--surface);
 }
 
+/* ---------- centered statement slides ---------- */
+.slide-hero.center{align-items:center; text-align:center}
+.slide-hero.center .lede.big{margin-left:auto; margin-right:auto}
+
+/* ---------- pictogram diagrams ---------- */
+.pico-row{display:flex; align-items:flex-start; justify-content:center; gap:2px; flex-wrap:wrap; margin-top:10px}
+.pico-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:30px 20px;
+  max-width:760px; margin:10px auto 0;
+}
+.pico{display:flex; flex-direction:column; align-items:center; gap:13px; width:178px}
+.pico .badge{
+  width:76px; height:76px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--line); background:var(--surface); color:var(--ink-2);
+  box-shadow:var(--shadow); flex:none;
+}
+.pico.beam .badge{border-color:var(--beam); color:var(--beam); background:var(--beam-tint)}
+.pico.dim .badge{color:var(--ink-3)}
+.pico svg{width:32px; height:32px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round}
+.pico .ptag{font:600 11px/1 "IBM Plex Mono", monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3)}
+.pico.beam .ptag{color:var(--beam)}
+.pico .plabel{font:600 18px/1.3 "IBM Plex Sans", sans-serif; color:var(--ink); text-align:center}
+.pico .pnote{font:400 14px/1.4 "IBM Plex Sans", sans-serif; color:var(--ink-2); text-align:center}
+.parrow{align-self:center; margin-top:24px; color:var(--line); flex:none; padding:0 4px}
+.parrow svg{width:38px; height:18px; stroke:currentColor; stroke-width:1.8; fill:none; stroke-linecap:round; stroke-linejoin:round}
+
+/* ---------- mini node-flow (reuses .nbox/.nt/.ns/.edge tokens, sized up) ---------- */
+.miniflow{width:100%; max-width:1000px; margin:12px auto 0; display:block; height:auto}
+.miniflow .nt{font-size:15px}
+.miniflow .ns{font-size:12px}
+.miniflow .el{font-size:11.5px}
+.miniflow .mloop .edge{stroke-dasharray:6 5; stroke:var(--beam-edge)}
+.miniflow .mloop .el{fill:var(--beam)}
+.miniflow .nbox.beam{stroke:var(--beam); fill:var(--beam-tint)}
+.miniflow .nt.beam{fill:var(--beam)}
+
+/* ---------- reveal-on-enter animation ---------- */
+@keyframes riseIn{from{opacity:0; transform:translateY(16px)} to{opacity:1; transform:translateY(0)}}
+.slide .reveal{opacity:0}
+.slide.active .reveal{animation:riseIn .6s cubic-bezier(.16,1,.3,1) both}
+.slide.active .reveal.r0{animation-delay:.02s}
+.slide.active .reveal.r1{animation-delay:.12s}
+.slide.active .reveal.r2{animation-delay:.22s}
+.slide.active .reveal.r3{animation-delay:.32s}
+.slide.active .reveal.r4{animation-delay:.42s}
+.slide.active .reveal.r5{animation-delay:.52s}
+
 /* ---------- theme switch ---------- */
-.topbar{display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap}
 .themectl{
   display:inline-flex; align-items:center; gap:2px; padding:3px;
   background:var(--surface-2); border:1px solid var(--line); border-radius:999px;
@@ -224,9 +320,13 @@ td.who{white-space:nowrap; font-size:13.5px}
 }
 .card .tag{font:600 10px/1 "IBM Plex Mono", monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3)}
 .card.simcard .tag{color:var(--sim)}
+.card.beamcard .tag{color:var(--beam)}
 .card p{color:var(--ink-2); font-size:14px}
 .card ul{margin:0; padding-left:17px; color:var(--ink-2); font-size:13.5px; display:flex; flex-direction:column; gap:5px}
 .card code{font:500 12px "IBM Plex Mono", monospace; color:var(--ink); background:var(--surface-2); padding:1px 5px; border-radius:4px}
+.card .num{
+  font:700 26px/1 "IBM Plex Sans Condensed", sans-serif; color:var(--beam);
+}
 
 footer{
   border-top:1px solid var(--line); padding-top:22px; color:var(--ink-3);
@@ -234,7 +334,7 @@ footer{
 }
 footer b{color:var(--ink-2); font-weight:600}
 
-/* ---------- fullscreen (presenter view) ---------- */
+/* ---------- fullscreen (presenter view for the diagram card itself) ---------- */
 .stage.full{
   position:fixed; inset:0; z-index:9999; margin:0;
   width:100vw; height:100vh; max-height:100vh;
@@ -253,7 +353,6 @@ footer b{color:var(--ink-2); font-weight:600}
 .stage.full .transport{grid-area:transport; padding:12px 20px; border-top:1px solid var(--line-2)}
 .stage.full .legend{display:none}
 
-/* compact readout strip */
 .stage.full .readout{
   grid-area:side; padding:14px 20px; gap:22px; align-items:center;
   grid-template-columns:minmax(0,1fr) auto; max-height:28vh; overflow:hidden;
@@ -270,7 +369,6 @@ footer b{color:var(--ink-2); font-weight:600}
 .stage.full ol.steps button span:last-child{display:none}
 .stage.full ol.steps li.cur button{border-color:var(--beam); background:var(--beam-tint); color:var(--beam)}
 
-/* wide displays get the full step list as a side rail */
 @media (min-width:1500px){
   .stage.full{
     grid-template-columns:minmax(0,1fr) 340px;
@@ -295,381 +393,586 @@ footer b{color:var(--ink-2); font-weight:600}
   .stage.full .readout{display:none}
   .stage.full{grid-template-rows:auto minmax(0,1fr) auto; grid-template-areas:"tabs" "canvas" "transport"}
 }
-body.locked{overflow:hidden}
 .fshint{
   font:500 10.5px/1 "IBM Plex Mono", monospace; letter-spacing:.1em;
   text-transform:uppercase; color:var(--ink-3); align-self:center;
 }
 .stage:not(.full) .fshint{display:none}
 
+/* ---------- deck-level fullscreen (present mode) ---------- */
+.deck.present{position:fixed; inset:0; z-index:10000; background:var(--bg)}
+.deck.present .deckbar{padding:12px 28px}
+.deck.present .slide{padding:56px 40px 40px}
+
 @media (max-width:860px){
   .readout{grid-template-columns:1fr}
-  .wrap{padding:32px 16px 72px; gap:32px}
+  .slide{padding:28px 16px 40px}
+  .deckbar{padding:12px 16px}
+  .deck-brand{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   .eg.on .edge{animation:none; stroke-dasharray:none}
   *{transition-duration:.01ms !important}
+  .slide{transform:none !important}
+  .slide .reveal{animation:none !important; opacity:1 !important}
 }
 </style>
 </head>
 <body>
 
+<div class="deck" id="deck">
 
-<div class="wrap">
-
-<header>
-  <div class="topbar">
-    <p class="eyebrow">Presidio · Hackathon 2026 · System design</p>
-    <div class="themectl" id="themectl" role="group" aria-label="Colour theme">
-      <button type="button" data-theme-set="auto" aria-pressed="true">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5"></circle><path d="M8 3v10"></path></svg>Auto</button>
-      <button type="button" data-theme-set="light" aria-pressed="false">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2"></circle><path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"></path></svg>Light</button>
-      <button type="button" data-theme-set="dark" aria-pressed="false">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.8 5.8 0 1 0 7 7Z"></path></svg>Dark</button>
-    </div>
-  </div>
-  <h1>Offset Architecture</h1>
-  <p class="lede">Offset lets a director design a film set by talking to an agent, watch it build live in the browser, then run the planned camera move through a <b>physics engine</b> before anyone builds anything. The simulator doesn't render a picture of the set and guess. It casts real rays through the camera frustum against real collision meshes, and a second agent turns what it finds into fixes the director can apply.</p>
-  <div class="meta">
-    <span>OpenUSD</span><span>NVIDIA Omniverse Kit</span><span>PhysX</span><span>Three.js</span><span>FastAPI</span><span>Two LLM agents</span>
-  </div>
-</header>
-
-<section>
-  <h2>The system, end to end</h2>
-  <p class="lede" style="font-size:15px;margin:0">Pick a flow to watch data move through it. Each step lights the components it touches and names the payload crossing the wire.</p>
-
-  <div class="stage">
-    <div class="scenarios" id="scenarios" role="group" aria-label="Choose a flow"></div>
-
-    <div class="canvas">
-<svg class="diagram" id="dg" viewBox="0 0 1280 510" role="img" aria-label="Offset architecture: a director works in a browser web app that talks to a FastAPI backend, which calls two LLM agents and dispatches USD stages to an NVIDIA Omniverse Kit GPU host for PhysX validation and RTX capture, with results looping back to the browser.">
-  <defs>
-    <marker id="ah" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 Z" fill="var(--line)"></path>
-    </marker>
-    <marker id="ah-on" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="5.4" markerHeight="5.4" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 Z" fill="var(--beam)"></path>
-    </marker>
-  </defs>
-
-  <!-- group containers -->
-  <g class="grp" id="g-web">
-    <rect class="gbox" x="236" y="210" width="260" height="208" rx="12"></rect>
-    <text class="glabel" x="250" y="234">BROWSER · REACT + THREE.JS</text>
-  </g>
-  <g class="grp" id="g-api">
-    <rect class="gbox" x="600" y="210" width="260" height="208" rx="12"></rect>
-    <text class="glabel" x="614" y="234">BACKEND · FASTAPI</text>
-  </g>
-  <g class="grp" id="g-gpu">
-    <rect class="gbox sim" x="964" y="210" width="268" height="208" rx="12"></rect>
-    <text class="glabel sim" x="978" y="234">GPU HOST · OMNIVERSE KIT</text>
-  </g>
-
-  <!-- edges -->
-  <g class="eg" id="e-brief">
-    <path class="edge" d="M136 270 L232 270"></path>
-    <text class="el" x="184" y="260" text-anchor="middle">set brief</text>
-  </g>
-  <g class="eg" id="e-review">
-    <path class="edge" d="M232 378 L136 378"></path>
-    <text class="el" x="184" y="368" text-anchor="middle">review</text>
-  </g>
-  <g class="eg" id="e-req">
-    <path class="edge" d="M500 270 L596 270"></path>
-    <text class="el" x="548" y="260" text-anchor="middle">REST / JSON</text>
-  </g>
-  <g class="eg" id="e-res">
-    <path class="edge" d="M596 378 L500 378"></path>
-    <text class="el" x="548" y="360" text-anchor="middle">scene_config</text>
-    <text class="el" x="548" y="371" text-anchor="middle">report + media</text>
-  </g>
-  <g class="eg bi" id="e-design">
-    <path class="edge" d="M652 206 L652 106"></path>
-    <text class="el" x="661" y="152">brief ↔ scene</text>
-  </g>
-  <g class="eg bi" id="e-validate">
-    <path class="edge" d="M830 206 L830 106"></path>
-    <text class="el" x="839" y="152">flags ↔ fix report</text>
-  </g>
-  <g class="eg" id="e-sim">
-    <path class="edge" d="M864 270 L960 270"></path>
-    <text class="el" x="912" y="249" text-anchor="middle">set.usda</text>
-    <text class="el" x="912" y="260" text-anchor="middle">+ shot list</text>
-  </g>
-  <g class="eg" id="e-out">
-    <path class="edge" d="M960 378 L864 378"></path>
-    <text class="el" x="912" y="358" text-anchor="middle">video · frames</text>
-    <text class="el" x="912" y="369" text-anchor="middle">+ flags</text>
-  </g>
-  <g class="eg loop" id="e-loop">
-    <path class="edge" d="M730 418 L730 456 Q730 470 716 470 L380 470 Q366 470 366 456 L366 424"></path>
-    <text class="el" x="548" y="488" text-anchor="middle">apply fix → regenerate stage → re-run the same checks</text>
-  </g>
-
-  <!-- nodes -->
-  <g class="node actor" id="n-director">
-    <rect class="nbox" x="24" y="248" width="108" height="152" rx="9"></rect>
-    <text class="nt" x="78" y="318" text-anchor="middle">Director</text>
-    <text class="ns" x="78" y="334" text-anchor="middle">previz / art dept</text>
-  </g>
-
-  <g class="node" id="n-chat">
-    <rect class="nbox" x="252" y="248" width="228" height="44" rx="8"></rect>
-    <text class="nt" x="266" y="267">Chat Panel</text>
-    <text class="ns" x="266" y="281">brief · clarify · approve</text>
-  </g>
-  <g class="node" id="n-view">
-    <rect class="nbox" x="252" y="302" width="228" height="44" rx="8"></rect>
-    <text class="nt" x="266" y="321">3D Set Viewport</text>
-    <text class="ns" x="266" y="335">Three.js live preview</text>
-  </g>
-  <g class="node" id="n-review">
-    <rect class="nbox" x="252" y="356" width="228" height="44" rx="8"></rect>
-    <text class="nt" x="266" y="375">Review Panel</text>
-    <text class="ns" x="266" y="389">video · issues · fixes</text>
-  </g>
-
-  <g class="node" id="n-orch">
-    <rect class="nbox" x="616" y="248" width="228" height="44" rx="8"></rect>
-    <text class="nt" x="630" y="267">Orchestrator</text>
-    <text class="ns" x="630" y="281">/chat /usd /render /fix</text>
-  </g>
-  <g class="node" id="n-usd">
-    <rect class="nbox" x="616" y="302" width="228" height="44" rx="8"></rect>
-    <text class="nt" x="630" y="321">USD Builder</text>
-    <text class="ns" x="630" y="335">pxr.Usd → set.usda</text>
-  </g>
-  <g class="node" id="n-store">
-    <rect class="nbox" x="616" y="356" width="228" height="44" rx="8"></rect>
-    <text class="nt" x="630" y="375">Artifact Store</text>
-    <text class="ns" x="630" y="389">stages · renders · results</text>
-  </g>
-
-  <g class="node" id="n-load">
-    <rect class="nbox" x="980" y="248" width="236" height="44" rx="8"></rect>
-    <text class="nt" x="994" y="267">Stage Loader</text>
-    <text class="ns" x="994" y="281">opens the USD stage</text>
-  </g>
-  <g class="node" id="n-physx">
-    <rect class="nbox" x="980" y="302" width="236" height="44" rx="8"></rect>
-    <text class="nt" x="994" y="321">PhysX Validator</text>
-    <text class="ns" x="994" y="335">frustum raycasts · collisions</text>
-  </g>
-  <g class="node" id="n-rtx">
-    <rect class="nbox" x="980" y="356" width="236" height="44" rx="8"></rect>
-    <text class="nt" x="994" y="375">RTX Render + Capture</text>
-    <text class="ns" x="994" y="389">frames → MP4</text>
-  </g>
-
-  <g class="node" id="n-agent-design">
-    <rect class="nbox" x="570" y="28" width="164" height="74" rx="9"></rect>
-    <text class="nt" x="584" y="54">Set Design Agent</text>
-    <text class="ns" x="584" y="70">LLM · brief → scene</text>
-    <text class="ns" x="584" y="84">clarify, then extract</text>
-  </g>
-  <g class="node" id="n-agent-val">
-    <rect class="nbox" x="748" y="28" width="164" height="74" rx="9"></rect>
-    <text class="nt" x="762" y="54">Validation Agent</text>
-    <text class="ns" x="762" y="70">LLM · flags → fixes</text>
-    <text class="ns" x="762" y="84">grounded in re-checks</text>
-  </g>
-</svg>
-    </div>
-
-    <div class="transport">
-      <button class="tb" id="prev" type="button">◀ Prev</button>
-      <button class="tb primary" id="play" type="button">Play</button>
-      <button class="tb" id="next" type="button">Next ▶</button>
-      <button class="tb" id="stop" type="button">Stop</button>
-      <div class="spacer"></div>
-      <div class="speed">
-        <label for="spd">PACE</label>
-        <select id="spd">
-          <option value="1000">1.0s / step</option>
-          <option value="1800" selected>1.8s / step</option>
-          <option value="3000">3.0s / step</option>
-        </select>
+  <div class="deckbar">
+    <span class="deck-brand">Presidio · Hackathon 2026 · Off-frame</span>
+    <div class="deck-progress"><i id="deckProgressFill"></i></div>
+    <div class="deck-controls">
+      <span class="deck-count" id="deckCount">1 / 9</span>
+      <div class="deckdots" id="deckDots"></div>
+      <button class="deckbtn" id="deckPrev" type="button" aria-label="Previous slide">◀</button>
+      <button class="deckbtn" id="deckNext" type="button" aria-label="Next slide">▶</button>
+      <button class="deckbtn primary" id="deckFs" type="button" aria-pressed="false">⤢ Present</button>
+      <div class="themectl" id="themectl" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-set="auto" aria-pressed="true">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5"></circle><path d="M8 3v10"></path></svg>Auto</button>
+        <button type="button" data-theme-set="light" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2"></circle><path d="M8 1.4v1.6M8 13v1.6M1.4 8h1.6M13 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"></path></svg>Light</button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.8 5.8 0 1 0 7 7Z"></path></svg>Dark</button>
       </div>
-      <div class="counter" id="counter">·· / ··</div>
-      <button class="tb" id="fs" type="button" aria-pressed="false">⤢ Fullscreen</button>
-      <span class="fshint">Esc to exit</span>
     </div>
+  </div>
 
-    <div class="readout">
-      <div>
-        <p class="lbl" id="rlabel">No flow selected</p>
-        <h3 id="rtitle">Pick a flow above to step through the system</h3>
-        <p id="rdesc">The static diagram shows every component and the channels between them. Choosing a flow walks one path through it, lighting the parts that participate and naming what crosses each hop.</p>
-        <div class="payload" id="rpayload" hidden></div>
+  <div class="slides" id="slides">
+
+    <!-- SLIDE 1 — TITLE -->
+    <div class="slide" data-title="Title">
+      <div class="slide-hero center">
+        <div class="reveal r0">
+          <p class="eyebrow">Presidio · Hackathon 2026 · System design</p>
+          <h1>Off-Frame, Verified</h1>
+        </div>
+        <p class="lede big reveal r1">A director describes a shot. The set builds live. The camera move is checked with real <b>physics</b> before anything gets built for real.</p>
+        <div class="meta reveal r2" style="justify-content:center">
+          <span>OpenUSD</span><span>NVIDIA Omniverse Kit</span><span>PhysX</span><span>Three.js</span><span>FastAPI</span><span>Two LLM agents</span>
+        </div>
       </div>
-      <ol class="steps" id="steplist"></ol>
     </div>
 
-    <div class="legend">
-      <div><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="26" y2="5" stroke="var(--line)" stroke-width="1.8"></line><path d="M26 1.5 L33 5 L26 8.5 Z" fill="var(--line)"></path></svg> one-way call</div>
-      <div><svg width="40" height="10" aria-hidden="true"><line x1="8" y1="5" x2="32" y2="5" stroke="var(--line)" stroke-width="1.8"></line><path d="M8 1.5 L1 5 L8 8.5 Z" fill="var(--line)"></path><path d="M32 1.5 L39 5 L32 8.5 Z" fill="var(--line)"></path></svg> call and return</div>
-      <div><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="26" y2="5" stroke="var(--beam-edge)" stroke-width="1.8" stroke-dasharray="6 5"></line><path d="M26 1.5 L33 5 L26 8.5 Z" fill="var(--beam-edge)"></path></svg> iteration loop</div>
-      <div><svg width="22" height="12" aria-hidden="true"><rect x="1" y="1" width="20" height="10" rx="3" fill="none" stroke="var(--sim)" stroke-width="1.4" stroke-dasharray="4 3"></rect></svg> GPU / simulation boundary</div>
+    <!-- SLIDE 2 — WHAT -->
+    <div class="slide" data-title="What">
+      <div class="slide-hero center">
+        <div class="reveal r0">
+          <p class="eyebrow">01 · What</p>
+          <h1>What Off-frame Is</h1>
+          <p class="lede big">A previz co-pilot for physical sets.</p>
+        </div>
+        <div class="pico-row">
+          <div class="pico reveal r1">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M5 7h18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H12l-5 4v-4H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"></path><circle cx="11" cy="13" r=".6" fill="currentColor" stroke="none"></circle><circle cx="14" cy="13" r=".6" fill="currentColor" stroke="none"></circle><circle cx="17" cy="13" r=".6" fill="currentColor" stroke="none"></circle></svg></div>
+            <p class="ptag">Talk</p>
+            <p class="plabel">Describe the shot</p>
+            <p class="pnote">plain language, no 3D tool</p>
+          </div>
+          <div class="parrow reveal r2"><svg viewBox="0 0 34 16"><path d="M1 8h28M22 1l8 7-8 7"></path></svg></div>
+          <div class="pico reveal r2">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M3 14s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"></path><circle cx="14" cy="14" r="3.4"></circle></svg></div>
+            <p class="ptag">Watch</p>
+            <p class="plabel">See it build live</p>
+            <p class="pnote">browser preview, same schema</p>
+          </div>
+          <div class="parrow reveal r3"><svg viewBox="0 0 34 16"><path d="M1 8h28M22 1l8 7-8 7"></path></svg></div>
+          <div class="pico beam reveal r3">
+            <div class="badge"><svg viewBox="0 0 28 28"><rect x="18" y="4" width="6" height="20" rx="1"></rect><path d="M4 14h12" stroke-dasharray="3 2.6"></path><path d="M13 10l3 4-3 4"></path></svg></div>
+            <p class="ptag">Verify</p>
+            <p class="plabel">Physics, not a guess</p>
+            <p class="pnote">PhysX + RTX before it's built</p>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- SLIDE 3 — WHY -->
+    <div class="slide" data-title="Why">
+      <div class="slide-hero center">
+        <div class="reveal r0">
+          <p class="eyebrow">02 · Why</p>
+          <h1>Why It Matters</h1>
+          <p class="lede big">Physical sets are expensive to get wrong.</p>
+        </div>
+        <div class="pico-row">
+          <div class="pico dim reveal r1">
+            <div class="badge"><svg viewBox="0 0 28 28"><rect x="4" y="4" width="20" height="20" rx="1.5"></rect><path d="M4 4l7 6-3 3 6 6-3 7"></path></svg></div>
+            <p class="ptag">Old way</p>
+            <p class="plabel">Found on set</p>
+            <p class="pnote">paid for twice</p>
+          </div>
+          <div class="parrow reveal r2"><svg viewBox="0 0 34 16"><path d="M1 8h28M22 1l8 7-8 7"></path></svg></div>
+          <div class="pico dim reveal r2">
+            <div class="badge"><svg viewBox="0 0 28 28"><rect x="4" y="6" width="20" height="16" rx="1.5"></rect><path d="M9 22l6-6 4 3 4-5"></path><circle cx="10" cy="11" r="1.6" fill="currentColor" stroke="none"></circle></svg></div>
+            <p class="ptag">A render</p>
+            <p class="plabel">Shows what looks right</p>
+            <p class="pnote">not what's physically wrong</p>
+          </div>
+          <div class="parrow reveal r3"><svg viewBox="0 0 34 16"><path d="M1 8h28M22 1l8 7-8 7"></path></svg></div>
+          <div class="pico beam reveal r3">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M14 3l9 3v7c0 6-4 10-9 12-5-2-9-6-9-12V6l9-3Z"></path><path d="M9.5 14l3 3 6-6"></path></svg></div>
+            <p class="ptag">Off-frame</p>
+            <p class="plabel">Found on a laptop</p>
+            <p class="pnote">days before the build</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4 — HOW -->
+    <div class="slide" data-title="How">
+      <div class="slide-hero center">
+        <div class="reveal r0">
+          <p class="eyebrow">03 · How</p>
+          <h1>How It Helps</h1>
+          <p class="lede big">One physics-checked loop, run without a human re-checking every frame by hand.</p>
+        </div>
+        <svg class="miniflow reveal r1" viewBox="0 0 1060 210" role="img" aria-label="Five-step loop: reduce human effort, find real issues, check every frame, propose a fix, apply and re-verify, which loops back to finding issues again.">
+          <g class="eg"><path class="edge" d="M190 58 L225 58"></path></g>
+          <g class="eg"><path class="edge" d="M405 58 L440 58"></path></g>
+          <g class="eg"><path class="edge" d="M620 58 L655 58"></path></g>
+          <g class="eg"><path class="edge" d="M835 58 L870 58"></path></g>
+          <g class="eg mloop"><path class="edge" d="M960 86 L960 150 L317 150 L317 90"></path><text class="el" x="638" y="170" text-anchor="middle">apply fix → rebuild stage → re-check</text></g>
+
+          <g class="node"><rect class="nbox" x="10" y="30" width="180" height="56" rx="9"></rect><text class="nt" x="100" y="52" text-anchor="middle">Reduce effort</text><text class="ns" x="100" y="70" text-anchor="middle">agent designs + checks</text></g>
+          <g class="node"><rect class="nbox" x="225" y="30" width="180" height="56" rx="9"></rect><text class="nt" x="315" y="52" text-anchor="middle">Find real issues</text><text class="ns" x="315" y="70" text-anchor="middle">collisions · off-set views</text></g>
+          <g class="node"><rect class="nbox" x="440" y="30" width="180" height="56" rx="9"></rect><text class="nt" x="530" y="52" text-anchor="middle">Check every frame</text><text class="ns" x="530" y="70" text-anchor="middle">not just a hero still</text></g>
+          <g class="node"><rect class="nbox" x="655" y="30" width="180" height="56" rx="9"></rect><text class="nt" x="745" y="52" text-anchor="middle">Propose a fix</text><text class="ns" x="745" y="70" text-anchor="middle">typed, testable change</text></g>
+          <g class="node"><rect class="nbox beam" x="870" y="30" width="180" height="56" rx="9"></rect><text class="nt beam" x="960" y="52" text-anchor="middle">Apply + verify</text><text class="ns" x="960" y="70" text-anchor="middle">rebuild, re-run checks</text></g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- SLIDE 5 — SYSTEM DIAGRAM (existing interactive flow) -->
+    <div class="slide" data-title="System, end to end">
+      <div class="slide-inner">
+        <section>
+          <h2>The system, end to end</h2>
+          <p class="lede" style="font-size:15px;margin:0">Pick a flow to watch data move through it. Each step lights the components it touches and names the payload crossing the wire.</p>
+
+          <div class="stage">
+            <div class="scenarios" id="scenarios" role="group" aria-label="Choose a flow"></div>
+
+            <div class="canvas">
+        <svg class="diagram" id="dg" viewBox="0 0 1280 560" role="img" aria-label="Off Frame architecture: a director works in a browser web app with no 3D preview, only USD text and later renders. The backend runs two single-call LLM agents in a sandbox -- one authors a pxr script, one edits USD directly to fix flags -- and dispatches the .usda to a separate Isaac Sim GPU host for RTX render and PhysX validation, which uploads results to S3, polled by the browser.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 Z" fill="var(--line)"></path>
+            </marker>
+            <marker id="ah-on" viewBox="0 0 10 10" refX="9.2" refY="5" markerWidth="5.4" markerHeight="5.4" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 Z" fill="var(--beam)"></path>
+            </marker>
+          </defs>
+
+          <!-- group containers -->
+          <g class="grp" id="g-web">
+            <rect class="gbox" x="236" y="210" width="260" height="208" rx="12"></rect>
+            <text class="glabel" x="250" y="234">BROWSER · REACT · NO 3D PREVIEW</text>
+          </g>
+          <g class="grp" id="g-api">
+            <rect class="gbox" x="600" y="210" width="260" height="208" rx="12"></rect>
+            <text class="glabel" x="614" y="234">BACKEND · FASTAPI</text>
+          </g>
+          <g class="grp" id="g-gpu">
+            <rect class="gbox sim" x="964" y="210" width="268" height="240" rx="12"></rect>
+            <text class="glabel sim" x="978" y="234">GPU HOST · ISAAC SIM (SEPARATE BOX)</text>
+          </g>
+
+          <!-- edges -->
+          <g class="eg" id="e-brief">
+            <path class="edge" d="M136 270 L232 270"></path>
+            <text class="el" x="184" y="260" text-anchor="middle">prompt</text>
+          </g>
+          <g class="eg" id="e-review">
+            <path class="edge" d="M232 378 L136 378"></path>
+            <text class="el" x="184" y="368" text-anchor="middle">render + flags</text>
+          </g>
+          <g class="eg" id="e-req">
+            <path class="edge" d="M500 270 L596 270"></path>
+            <text class="el" x="548" y="260" text-anchor="middle">REST / JSON</text>
+          </g>
+          <g class="eg" id="e-res">
+            <path class="edge" d="M596 378 L500 378"></path>
+            <text class="el" x="548" y="360" text-anchor="middle">.usda file</text>
+            <text class="el" x="548" y="371" text-anchor="middle">status + flags</text>
+          </g>
+          <g class="eg bi" id="e-design">
+            <path class="edge" d="M652 206 L652 106"></path>
+            <text class="el" x="661" y="152">prompt ↔ script</text>
+          </g>
+          <g class="eg bi" id="e-validate">
+            <path class="edge" d="M830 206 L830 106"></path>
+            <text class="el" x="839" y="152">flags ↔ fixed .usda</text>
+          </g>
+          <g class="eg" id="e-sim">
+            <path class="edge" d="M864 270 L960 270"></path>
+            <text class="el" x="912" y="249" text-anchor="middle">usda_path +</text>
+            <text class="el" x="912" y="260" text-anchor="middle">camera, frames</text>
+          </g>
+          <g class="eg" id="e-out">
+            <path class="edge" d="M960 378 L864 378"></path>
+            <text class="el" x="912" y="358" text-anchor="middle">validation_result</text>
+            <text class="el" x="912" y="369" text-anchor="middle">.json + flags</text>
+          </g>
+          <g class="eg" id="e-s3">
+            <path class="edge" d="M1098 400 L1098 432"></path>
+          </g>
+          <g class="eg loop" id="e-loop">
+            <path class="edge" d="M730 418 L730 456 Q730 470 716 470 L380 470 Q366 470 366 456 L366 424"></path>
+            <text class="el" x="548" y="488" text-anchor="middle">apply fix → re-run /validate-usd → compare flags</text>
+          </g>
+
+          <!-- nodes -->
+          <g class="node actor" id="n-director">
+            <rect class="nbox" x="24" y="248" width="108" height="152" rx="9"></rect>
+            <text class="nt" x="78" y="318" text-anchor="middle">Director</text>
+            <text class="ns" x="78" y="334" text-anchor="middle">previz / art dept</text>
+          </g>
+
+          <g class="node" id="n-chat">
+            <rect class="nbox" x="252" y="248" width="228" height="44" rx="8"></rect>
+            <text class="nt" x="266" y="267">Chat Panel</text>
+            <text class="ns" x="266" y="281">prompt → /chat-usd-file</text>
+          </g>
+          <g class="node" id="n-view">
+            <rect class="nbox" x="252" y="302" width="228" height="44" rx="8"></rect>
+            <text class="nt" x="266" y="321">USD + Camera Panel</text>
+            <text class="ns" x="266" y="335">.usda text · camera picker</text>
+          </g>
+          <g class="node" id="n-review">
+            <rect class="nbox" x="252" y="356" width="228" height="44" rx="8"></rect>
+            <text class="nt" x="266" y="375">Validate &amp; Fix Panel</text>
+            <text class="ns" x="266" y="389">render, flags · fix report</text>
+          </g>
+
+          <g class="node" id="n-orch">
+            <rect class="nbox" x="616" y="248" width="228" height="44" rx="8"></rect>
+            <text class="nt" x="630" y="267">Orchestrator</text>
+            <text class="ns" x="630" y="281">/chat-usd-file /validate-usd /propose-usd-fix</text>
+          </g>
+          <g class="node" id="n-usd">
+            <rect class="nbox" x="616" y="302" width="228" height="44" rx="8"></rect>
+            <text class="nt" x="630" y="321">Sandbox Runner</text>
+            <text class="ns" x="630" y="335">restricted pxr script exec</text>
+          </g>
+          <g class="node" id="n-store">
+            <rect class="nbox" x="616" y="356" width="228" height="44" rx="8"></rect>
+            <text class="nt" x="630" y="375">Job Tracker</text>
+            <text class="ns" x="630" y="389">background thread · status poll</text>
+          </g>
+
+          <g class="node" id="n-load">
+            <rect class="nbox" x="980" y="248" width="236" height="44" rx="8"></rect>
+            <text class="nt" x="994" y="267">Isaac Sim Runtime</text>
+            <text class="ns" x="994" y="281">ISAAC_SIM_PYTHON subprocess</text>
+          </g>
+          <g class="node" id="n-physx">
+            <rect class="nbox" x="980" y="302" width="236" height="44" rx="8"></rect>
+            <text class="nt" x="994" y="321">PhysX Validator</text>
+            <text class="ns" x="994" y="335">frustum off-set · camera collision</text>
+          </g>
+          <g class="node" id="n-rtx">
+            <rect class="nbox" x="980" y="356" width="236" height="44" rx="8"></rect>
+            <text class="nt" x="994" y="375">RTX Render + Capture</text>
+            <text class="ns" x="994" y="389">omni.replicator → frames → mp4</text>
+          </g>
+          <g class="node" id="n-s3">
+            <rect class="nbox" x="980" y="410" width="236" height="34" rx="8"></rect>
+            <text class="nt" x="994" y="431">S3 Store</text>
+            <text class="ns" x="1120" y="431" text-anchor="end">presigned URLs</text>
+          </g>
+
+          <g class="node" id="n-agent-design">
+            <rect class="nbox" x="570" y="28" width="164" height="74" rx="9"></rect>
+            <text class="nt" x="584" y="52">USD Script Agent</text>
+            <text class="ns" x="584" y="68">1 LLM call · tool-forced</text>
+            <text class="ns" x="584" y="82">script → sandbox → .usda</text>
+          </g>
+          <g class="node" id="n-agent-val">
+            <rect class="nbox" x="748" y="28" width="164" height="74" rx="9"></rect>
+            <text class="nt" x="762" y="52">USD Fix Agent</text>
+            <text class="ns" x="762" y="68">1 LLM call · edits .usda</text>
+            <text class="ns" x="762" y="82">no fallback · 90s timeout</text>
+          </g>
+        </svg>
+            </div>
+
+            <div class="transport">
+              <button class="tb" id="prev" type="button">◀ Prev</button>
+              <button class="tb primary" id="play" type="button">Play</button>
+              <button class="tb" id="next" type="button">Next ▶</button>
+              <button class="tb" id="stop" type="button">Stop</button>
+              <div class="spacer"></div>
+              <div class="speed">
+                <label for="spd">PACE</label>
+                <select id="spd">
+                  <option value="1000">1.0s / step</option>
+                  <option value="1800" selected>1.8s / step</option>
+                  <option value="3000">3.0s / step</option>
+                </select>
+              </div>
+              <div class="counter" id="counter">·· / ··</div>
+              <button class="tb" id="fs" type="button" aria-pressed="false">⤢ Fullscreen</button>
+              <span class="fshint">Esc to exit</span>
+            </div>
+
+            <div class="readout">
+              <div>
+                <p class="lbl" id="rlabel">No flow selected</p>
+                <h3 id="rtitle">Pick a flow above to step through the system</h3>
+                <p id="rdesc">The static diagram shows every component and the channels between them. Choosing a flow walks one path through it, lighting the parts that participate and naming what crosses each hop.</p>
+                <div class="payload" id="rpayload" hidden></div>
+              </div>
+              <ol class="steps" id="steplist"></ol>
+            </div>
+
+            <div class="legend">
+              <div><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="26" y2="5" stroke="var(--line)" stroke-width="1.8"></line><path d="M26 1.5 L33 5 L26 8.5 Z" fill="var(--line)"></path></svg> one-way call</div>
+              <div><svg width="40" height="10" aria-hidden="true"><line x1="8" y1="5" x2="32" y2="5" stroke="var(--line)" stroke-width="1.8"></line><path d="M8 1.5 L1 5 L8 8.5 Z" fill="var(--line)"></path><path d="M32 1.5 L39 5 L32 8.5 Z" fill="var(--line)"></path></svg> call and return</div>
+              <div><svg width="34" height="10" aria-hidden="true"><line x1="1" y1="5" x2="26" y2="5" stroke="var(--beam-edge)" stroke-width="1.8" stroke-dasharray="6 5"></line><path d="M26 1.5 L33 5 L26 8.5 Z" fill="var(--beam-edge)"></path></svg> iteration loop</div>
+              <div><svg width="22" height="12" aria-hidden="true"><rect x="1" y="1" width="20" height="10" rx="3" fill="none" stroke="var(--sim)" stroke-width="1.4" stroke-dasharray="4 3"></rect></svg> GPU / simulation boundary</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- SLIDE 6 — WHAT'S NEXT -->
+    <div class="slide" data-title="What's Next">
+      <div class="slide-hero center">
+        <div class="reveal r0">
+          <p class="eyebrow">04 · What's Next</p>
+          <h1>Where This Goes</h1>
+          <p class="lede big">The same physics-grounded approach, extended past one shot in one scene.</p>
+        </div>
+        <div class="pico-grid">
+          <div class="pico reveal r1">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M14 4l10 5.5L14 15 4 9.5 14 4Z"></path><path d="M4 14.5l10 5.5 10-5.5"></path><path d="M4 19.5l10 5.5 10-5.5"></path></svg></div>
+            <p class="ptag">Sequencing</p>
+            <p class="plabel">Multi-scene sequences</p>
+            <p class="pnote">shot lists across scenes, generated consecutively</p>
+          </div>
+          <div class="pico reveal r2">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M14 4a7 7 0 0 0-4 12.7c.8.6 1.3 1.5 1.3 2.5V20h5.4v-.8c0-1 .5-1.9 1.3-2.5A7 7 0 0 0 14 4Z"></path><path d="M11.5 24h5"></path></svg></div>
+            <p class="ptag">Recommend</p>
+            <p class="plabel">Smarter scene picks</p>
+            <p class="pnote">layouts matched to what the brief needs</p>
+          </div>
+          <div class="pico reveal r3">
+            <div class="badge"><svg viewBox="0 0 28 28"><rect x="3" y="3" width="22" height="22" rx="1.5"></rect><path d="M3 14h10M14 3v11M14 14h11"></path><rect x="17" y="17" width="5" height="5"></rect></svg></div>
+            <p class="ptag">Blocking</p>
+            <p class="plabel">Item placement</p>
+            <p class="pnote">where things go — built for stage &amp; theater too</p>
+          </div>
+          <div class="pico reveal r4">
+            <div class="badge"><svg viewBox="0 0 28 28"><circle cx="14" cy="6" r="2.4"></circle><path d="M14 9v6M14 15l-4 6M14 15l5 5M14 11l-5 2M14 11l5-1"></path></svg></div>
+            <p class="ptag">Choreography</p>
+            <p class="plabel">Person movement</p>
+            <p class="pnote">validating actor paths through the set</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6B — GO-TO-MARKET -->
+    <div class="slide" data-title="Go-to-Market">
+      <div class="slide-hero center">
+        <div class="reveal r0">
+          <p class="eyebrow">05 · Go-to-Market</p>
+          <h1>A Ready-Made Path In</h1>
+          <p class="lede big">Presidio already has customers in the media vertical — this speaks directly to a problem they already have.</p>
+        </div>
+        <div class="pico-row">
+          <div class="pico reveal r1">
+            <div class="badge"><svg viewBox="0 0 28 28"><circle cx="10" cy="11" r="4"></circle><path d="M3 24c0-4 3-7 7-7s7 3 7 7"></path><circle cx="20" cy="9" r="3"></circle><path d="M17 24c.4-3 2-5.2 5-5.6"></path></svg></div>
+            <p class="ptag">Today</p>
+            <p class="plabel">Media customers at Presidio</p>
+            <p class="pnote">already building physical sets</p>
+          </div>
+          <div class="parrow reveal r2"><svg viewBox="0 0 34 16"><path d="M1 8h28M22 1l8 7-8 7"></path></svg></div>
+          <div class="pico beam reveal r2">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M14 3l9 3v7c0 6-4 10-9 12-5-2-9-6-9-12V6l9-3Z"></path><path d="M9.5 14l3 3 6-6"></path></svg></div>
+            <p class="ptag">Land</p>
+            <p class="plabel">Offframe inside existing accounts</p>
+            <p class="pnote">a tool their teams already need</p>
+          </div>
+          <div class="parrow reveal r3"><svg viewBox="0 0 34 16"><path d="M1 8h28M22 1l8 7-8 7"></path></svg></div>
+          <div class="pico reveal r3">
+            <div class="badge"><svg viewBox="0 0 28 28"><path d="M4 20l7-7 5 5 8-9"></path><path d="M17 8h7v7"></path></svg></div>
+            <p class="ptag">Expand</p>
+            <p class="plabel">Grow the media vertical</p>
+            <p class="pnote">a proof point that pulls in new customers</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7 — PAYLOADS -->
+    <div class="slide" data-title="What crosses the wire">
+      <div class="slide-inner">
+        <section>
+          <h2>What actually crosses the wire</h2>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>Payload</th><th class="who">Written by</th><th>Contents</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>scene_config</td>
+                  <td class="who">Set Design Agent</td>
+                  <td>Room dimensions, props, lighting, camera placement and its move. One typed object. The browser preview and the USD builder read the same schema, so the preview can never drift from what gets simulated.</td>
+                </tr>
+                <tr>
+                  <td>set.usda</td>
+                  <td class="who">USD Builder</td>
+                  <td>A real OpenUSD stage: geometry with collision meshes, an off-set marker on anything outside the built space, and a camera whose move is baked as time samples.</td>
+                </tr>
+                <tr>
+                  <td>result.json</td>
+                  <td class="who">GPU host</td>
+                  <td>Rendered frame paths, the captured video, and machine-readable findings: coverage flags, physics flags, and camera-collision flags with the exact frame, frustum corner and prim involved.</td>
+                </tr>
+                <tr>
+                  <td>fix report</td>
+                  <td class="who">Validation Agent</td>
+                  <td>A plain-language summary, the issues found, what fixing each one buys the shot, and a list of typed fixes the backend knows how to apply: <code>change_lens</code>, <code>reposition_camera</code>, <code>add_wild_wall</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- SLIDE 8 — COMPONENTS -->
+    <div class="slide" data-title="Components">
+      <div class="slide-inner">
+        <section>
+          <h2>Components</h2>
+          <div class="cards">
+            <div class="card">
+              <p class="tag">Browser</p>
+              <h3>Web app</h3>
+              <p>The whole director-facing surface. Chat, live 3D preview and the review panel sit side by side so a change and its consequence are visible at once.</p>
+              <ul>
+                <li>React app, single page</li>
+                <li>Three.js renders <code>scene_config</code> directly: walls, props, dolly path, camera frustum</li>
+                <li>Review panel plays the simulation video against the flagged frames</li>
+              </ul>
+            </div>
+            <div class="card">
+              <p class="tag">Service</p>
+              <h3>Backend orchestrator</h3>
+              <p>The only component that talks to everything else. Holds the thread, owns the scene, and decides when to call a model versus the GPU host.</p>
+              <ul>
+                <li>FastAPI: <code>/chat</code>, <code>/generate-usd</code>, <code>/render</code>, <code>/propose-fix</code></li>
+                <li>Authors USD with <code>pxr.Usd</code> rather than emitting text</li>
+                <li>Keys every stage, render and report to one <code>scene_id</code></li>
+              </ul>
+            </div>
+            <div class="card">
+              <p class="tag">Reasoning</p>
+              <h3>Set Design Agent</h3>
+              <p>Turns a sentence into a scene graph. Asks for what is missing first; only emits structure once the brief is complete.</p>
+              <ul>
+                <li>Cheap fast model for clarifying turns, stronger model for extraction</li>
+                <li>Output is the typed <code>scene_config</code>, never free text the renderer has to parse</li>
+              </ul>
+            </div>
+            <div class="card simcard">
+              <p class="tag">GPU host</p>
+              <h3>Omniverse Kit runtime</h3>
+              <p>One USD stage serves the scene graph, the physics and the renderer. Nothing is exported between tools, so the thing being validated is the thing being shown.</p>
+              <ul>
+                <li>PhysX casts four frustum-corner rays per sampled frame against real collision meshes</li>
+                <li>Flags rays that reach past the built set, and rig geometry the camera would hit</li>
+                <li>RTX renders the move; frames captured to video</li>
+              </ul>
+            </div>
+            <div class="card">
+              <p class="tag">Reasoning</p>
+              <h3>Validation Agent</h3>
+              <p>Reads the run and writes the report. Constrained to fixes the simulator can actually re-check, so a proposed fix is a testable claim rather than a plausible sentence.</p>
+              <ul>
+                <li>Input: flags plus the scene they came from</li>
+                <li>Output: summary, issues, benefits, typed fixes</li>
+                <li>Read-only: nothing is applied until the director says so</li>
+              </ul>
+            </div>
+            <div class="card">
+              <p class="tag">Loop</p>
+              <h3>Fix and re-verify</h3>
+              <p>The part that makes the tool trustworthy: a fix is applied, the stage is rebuilt, and the identical checks run again so the before / after count is real.</p>
+              <ul>
+                <li>Fixes mutate <code>scene_config</code>, then USD is regenerated, never patched</li>
+                <li>A fix that fails to clear its flag is reported unresolved, not dropped</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- SLIDE 9 — CLOSING -->
+    <div class="slide" data-title="Design intent">
+      <div class="slide-hero">
+        <footer>
+          <p><b>Design intent.</b> Two boundaries carry the weight of this architecture. The first is the schema boundary: <code style="font:500 12px 'IBM Plex Mono',monospace">scene_config</code> is the only description of the set, so the preview, the USD stage and the validator can never disagree about what is being built. The second is the process boundary at the GPU host: reasoning happens outside it, physics happens inside it, and only files cross.</p>
+          <p>Off-frame · Presidio Hackathon 2026 · target architecture</p>
+        </footer>
+      </div>
+    </div>
+
   </div>
-</section>
-
-<section>
-  <h2>What actually crosses the wire</h2>
-  <div class="tablewrap">
-    <table>
-      <thead><tr><th>Payload</th><th class="who">Written by</th><th>Contents</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>scene_config</td>
-          <td class="who">Set Design Agent</td>
-          <td>Room dimensions, props, lighting, camera placement and its move. One typed object. The browser preview and the USD builder read the same schema, so the preview can never drift from what gets simulated.</td>
-        </tr>
-        <tr>
-          <td>set.usda</td>
-          <td class="who">USD Builder</td>
-          <td>A real OpenUSD stage: geometry with collision meshes, an off-set marker on anything outside the built space, and a camera whose move is baked as time samples.</td>
-        </tr>
-        <tr>
-          <td>result.json</td>
-          <td class="who">GPU host</td>
-          <td>Rendered frame paths, the captured video, and machine-readable findings: coverage flags, physics flags, and camera-collision flags with the exact frame, frustum corner and prim involved.</td>
-        </tr>
-        <tr>
-          <td>fix report</td>
-          <td class="who">Validation Agent</td>
-          <td>A plain-language summary, the issues found, what fixing each one buys the shot, and a list of typed fixes the backend knows how to apply: <code>change_lens</code>, <code>reposition_camera</code>, <code>add_wild_wall</code>.</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section>
-  <h2>Components</h2>
-  <div class="cards">
-    <div class="card">
-      <p class="tag">Browser</p>
-      <h3>Web app</h3>
-      <p>The whole director-facing surface. Chat, live 3D preview and the review panel sit side by side so a change and its consequence are visible at once.</p>
-      <ul>
-        <li>React app, single page</li>
-        <li>Three.js renders <code>scene_config</code> directly: walls, props, dolly path, camera frustum</li>
-        <li>Review panel plays the simulation video against the flagged frames</li>
-      </ul>
-    </div>
-    <div class="card">
-      <p class="tag">Service</p>
-      <h3>Backend orchestrator</h3>
-      <p>The only component that talks to everything else. Holds the thread, owns the scene, and decides when to call a model versus the GPU host.</p>
-      <ul>
-        <li>FastAPI: <code>/chat</code>, <code>/generate-usd</code>, <code>/render</code>, <code>/propose-fix</code></li>
-        <li>Authors USD with <code>pxr.Usd</code> rather than emitting text</li>
-        <li>Keys every stage, render and report to one <code>scene_id</code></li>
-      </ul>
-    </div>
-    <div class="card">
-      <p class="tag">Reasoning</p>
-      <h3>Set Design Agent</h3>
-      <p>Turns a sentence into a scene graph. Asks for what is missing first; only emits structure once the brief is complete.</p>
-      <ul>
-        <li>Cheap fast model for clarifying turns, stronger model for extraction</li>
-        <li>Output is the typed <code>scene_config</code>, never free text the renderer has to parse</li>
-      </ul>
-    </div>
-    <div class="card simcard">
-      <p class="tag">GPU host</p>
-      <h3>Omniverse Kit runtime</h3>
-      <p>One USD stage serves the scene graph, the physics and the renderer. Nothing is exported between tools, so the thing being validated is the thing being shown.</p>
-      <ul>
-        <li>PhysX casts four frustum-corner rays per sampled frame against real collision meshes</li>
-        <li>Flags rays that reach past the built set, and rig geometry the camera would hit</li>
-        <li>RTX renders the move; frames captured to video</li>
-      </ul>
-    </div>
-    <div class="card">
-      <p class="tag">Reasoning</p>
-      <h3>Validation Agent</h3>
-      <p>Reads the run and writes the report. Constrained to fixes the simulator can actually re-check, so a proposed fix is a testable claim rather than a plausible sentence.</p>
-      <ul>
-        <li>Input: flags plus the scene they came from</li>
-        <li>Output: summary, issues, benefits, typed fixes</li>
-        <li>Read-only: nothing is applied until the director says so</li>
-      </ul>
-    </div>
-    <div class="card">
-      <p class="tag">Loop</p>
-      <h3>Fix and re-verify</h3>
-      <p>The part that makes the tool trustworthy: a fix is applied, the stage is rebuilt, and the identical checks run again so the before / after count is real.</p>
-      <ul>
-        <li>Fixes mutate <code>scene_config</code>, then USD is regenerated, never patched</li>
-        <li>A fix that fails to clear its flag is reported unresolved, not dropped</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <p><b>Design intent.</b> Two boundaries carry the weight of this architecture. The first is the schema boundary: <code style="font:500 12px 'IBM Plex Mono',monospace">scene_config</code> is the only description of the set, so the preview, the USD stage and the validator can never disagree about what is being built. The second is the process boundary at the GPU host: reasoning happens outside it, physics happens inside it, and only files cross.</p>
-  <p>Offset · Presidio Hackathon 2026 · target architecture</p>
-</footer>
-
 </div>
 
 <script>
 (function(){
   const FLOWS = [
-    { id:'design', name:'Design the set', steps:[
-      { t:'Director describes the shot', d:'A brief in plain language: the space, who is in it, and what the camera does. No 3D tool, no measurements.', p:'"small podcast room, one guest, slow dolly-in on the desk"', n:['n-director','n-chat'], e:['e-brief'] },
-      { t:'The turn reaches the orchestrator', d:'Each message is posted with the thread so far and the scene as it currently stands.', p:'POST /chat  { thread, scene_config }', n:['n-chat','n-orch'], e:['e-req'] },
-      { t:'Set Design Agent picks up the thread', d:'A fast model asks for whatever the brief is missing. Once it is complete, a stronger model takes over and extracts structure.', p:'clarify → extract', n:['n-orch','n-agent-design'], e:['e-design'] },
-      { t:'The agent emits a scene graph', d:'Room, props, lighting, camera placement and its move, as one typed object rather than prose a renderer has to interpret.', p:'scene_config { room, props, lighting, camera, move }', n:['n-agent-design'], e:[] },
-      { t:'The scene returns to the browser', d:'The same schema the backend will later turn into USD, so preview and build cannot diverge.', p:'200  scene_config', n:['n-orch','n-chat'], e:['e-res'] },
-      { t:'Three.js redraws the set live', d:'Walls, floor, props, the dolly path and the camera frustum, updated on every turn, so the director sees the consequence of each sentence.', p:'walls · props · dolly path · frustum', n:['n-view'], e:[] },
-      { t:'Iterate until it reads right', d:'Conversation and preview stay in one loop. Nothing has been built or simulated yet, so changes are free.', p:'next turn', n:['n-director','n-chat','n-view'], e:['e-review','e-brief'] }
+    { id:'generate', name:'Generate the USD', steps:[
+      { t:'Director types a prompt', d:'Plain language, no 3D tool, no measurements. There is no live preview to check first -- the next thing the director sees is the real generated file.', p:'"small podcast room, one guest, slow dolly-in on the desk"', n:['n-director','n-chat'], e:['e-brief'] },
+      { t:'The prompt reaches the orchestrator', d:'One request, no thread/session state beyond the messages sent with it.', p:'POST /chat-usd-file  { prompt, messages }', n:['n-chat','n-orch'], e:['e-req'] },
+      { t:'USD Script Agent writes a pxr script', d:'A single tool-forced LLM call -- not a multi-step planning agent, which used to take 15-20+ round trips and often never finished in time.', p:'tool_choice="write_usd_python_script_tool"', n:['n-orch','n-agent-design'], e:['e-design'] },
+      { t:'The script runs in a locked-down sandbox', d:'Only `from pxr import ...` is allowed -- no other imports, no disk writes. Builds an in-memory stage and exports it back to text.', p:'Usd.Stage.CreateInMemory() → ExportToString()', n:['n-usd'], e:[] },
+      { t:'A bad script gets exactly one repair attempt', d:'If validation fails (e.g. no real pxr import, or an unaimed camera), the model sees its own error once and retries. If that fails too, a deterministic template takes over -- no LLM, always succeeds.', p:'1 repair round-trip → deterministic fallback', n:['n-orch'], e:[] },
+      { t:'The .usda file returns to the browser', d:'A downloadable file, not JSON -- the source (llm vs fallback) and server path travel as response headers.', p:'FileResponse .usda + X-Offset-USD-Source/-Path', n:['n-orch','n-view'], e:['e-res'] },
+      { t:'Cameras are listed automatically', d:'A separate, plain pxr.Usd.Stage traversal -- no Isaac Sim needed for this -- populates the camera picker for the next step.', p:'POST /list-usd-cameras → { cameras: [...] }', n:['n-view'], e:[] }
     ]},
-    { id:'usd', name:'Freeze to USD', steps:[
-      { t:'Director approves the set', d:'The preview is signed off. Only now does the scene become a real stage.', p:'approve  scene_config', n:['n-director','n-view'], e:['e-review'] },
-      { t:'Browser requests a USD build', d:'The approved scene is sent back for authoring.', p:'POST /generate-usd  { scene_config }', n:['n-chat','n-orch'], e:['e-req'] },
-      { t:'USD Builder authors the stage', d:'Real USD prims through pxr: geometry, transforms, collision meshes, and an off-set marker on anything outside the built space.', p:'pxr.Usd → set.usda', n:['n-usd'], e:[] },
-      { t:'The camera move is baked in', d:'The dolly is written as time samples on the USD camera, so the simulator plays the exact planned move rather than an approximation of it.', p:'time-sampled xform · frames 0–72', n:['n-usd'], e:[] },
-      { t:'The stage lands in the store', d:'Keyed by scene_id, so every later render, flag and report points at one stage.', p:'stages/{scene_id}/set.usda', n:['n-store'], e:[] },
-      { t:'Stage text returns with the response', d:'The browser holds the USD without a second round trip, ready to dispatch a run.', p:'usd_content + scene_id', n:['n-orch','n-review'], e:['e-res'] }
+    { id:'validate', name:'Validate & simulate', steps:[
+      { t:'Director clicks Validate & Simulate', d:'Picks a camera and frame range, then kicks off the real physics-checked render.', p:'POST /validate-usd  { usda_path, camera, frames }', n:['n-review','n-orch'], e:['e-req'] },
+      { t:'The job is queued and returns immediately', d:'A daemon thread, not FastAPI BackgroundTasks -- a 15-20 min job would otherwise starve every other request on this server.', p:'202  { scene_id, status: "queued" }', n:['n-orch','n-store'], e:['e-res'] },
+      { t:'The stage crosses to a separate GPU box', d:'This machine has no GPU -- Isaac Sim runs on its own host, launched as a subprocess over ISAAC_SIM_PYTHON.', p:'standalone_render_and_validate.py --usd --camera --frames', n:['n-store','n-load'], e:['e-sim'] },
+      { t:'PhysX casts the frustum, frame by frame', d:'A dense ray grid per sampled frame against real collision meshes -- the actual differentiator: a physics query, not frustum math on paper.', p:'raycast grid × N frames', n:['n-physx'], e:[] },
+      { t:'Off-set views and camera-body collisions are flagged', d:'Rays that escape the built set, and separately, the camera rig itself overlapping geometry -- two distinct checks.', p:'violations[] + camera_collisions[]', n:['n-physx'], e:[] },
+      { t:'RTX renders the move and captures it', d:'omni.replicator.core renders every frame to PNG, then ffmpeg stitches them into a video the director can actually watch.', p:'rgb_####.png → shot.mp4', n:['n-rtx'], e:[] },
+      { t:'Results upload to S3', d:'Frames, video and validation_result.json all land in the render bucket as presigned URLs -- nothing stays only on the GPU box.', p:'s3://renders/{scene_id}/...', n:['n-rtx','n-s3'], e:['e-s3'] },
+      { t:'The browser polls until done', d:'Every 5 seconds against the job status endpoint, showing live progress ("captured frame N") while it waits.', p:'GET /validate-usd/{scene_id}/status', n:['n-view','n-review'], e:['e-out'] }
     ]},
-    { id:'sim', name:'Simulate and capture', steps:[
-      { t:'Browser triggers the run', d:'One request starts validation and rendering together.', p:'POST /render  { scene_id, shots }', n:['n-chat','n-orch'], e:['e-req'] },
-      { t:'Stage and shot list cross to the GPU host', d:'The process boundary: reasoning stays behind, only files go forward.', p:'set.usda + shot list', n:['n-orch','n-load'], e:['e-sim'] },
-      { t:'Kit opens the stage', d:'One USD stage feeds the scene graph, the physics and the renderer, with no export step between them.', p:'omni.usd  open_stage', n:['n-load'], e:[] },
-      { t:'PhysX casts the frustum, frame by frame', d:'Four corner rays per sampled frame against real collision meshes. This is the differentiator: a physics query, not frustum math on paper.', p:'raycast × 4 corners × N frames', n:['n-physx'], e:[] },
-      { t:'Off-set views and collisions are flagged', d:'Rays that reach past the built set, and rig geometry the camera would physically hit on the way through the move.', p:'{ frame, corner, prim }', n:['n-physx'], e:[] },
-      { t:'RTX renders the move and captures it', d:'The same stage rendered frame by frame and written out as video the director can actually watch.', p:'frames → MP4', n:['n-rtx'], e:[] },
-      { t:'Media and findings come back together', d:'Renders, video and machine-readable flags return as one result and land in the store.', p:'result.json { renders, video, flags }', n:['n-rtx','n-store'], e:['e-out'] }
+    { id:'fix', name:'Propose a fix', steps:[
+      { t:'Director clicks Generate Fix Report', d:'Only available once a validation run has actually finished with flags to reason about.', p:'usda_path + validation_result', n:['n-review','n-orch'], e:[] },
+      { t:'USD Fix Agent reads the real file', d:'One LLM call, reasoning directly over the full .usda text plus the exact flagged frames/corners/prims -- not a summary of them.', p:'POST /propose-usd-fix', n:['n-orch','n-agent-val'], e:['e-validate'] },
+      { t:'It returns a corrected .usda directly', d:'Not a typed operation that mutates some intermediate scene description -- a complete, ready-to-validate replacement file. No fallback here: if this call fails, the request fails.', p:'{ summary, fixes[], fixed_usda_path, fixed_usda_content }', n:['n-agent-val'], e:[] },
+      { t:'The fix report reaches the browser', d:'Read-only by design -- nothing about the live scene has changed yet.', p:'summary + fixes + fixed .usda', n:['n-orch','n-review'], e:['e-res'] },
+      { t:'Director reviews the proposed fix', d:'Reads the reasoning before deciding whether to actually try it.', p:'accept | discard', n:['n-review','n-director'], e:['e-review'] }
     ]},
-    { id:'report', name:'Validate and report', steps:[
-      { t:'Orchestrator assembles the findings', d:'Raw flags plus the scene they came from, so the reasoning has something to reason about.', p:'flags + scene_config', n:['n-store','n-orch'], e:[] },
-      { t:'Validation Agent reads the run', d:'Constrained to fixes the simulator can actually re-check, so what it proposes is a testable claim.', p:'POST /propose-fix', n:['n-orch','n-agent-val'], e:['e-validate'] },
-      { t:'The agent writes the report', d:'A plain-language summary, the issues found, what fixing each one buys the shot, and typed fixes the backend knows how to apply.', p:'{ summary, issues, benefits, fixes[] }', n:['n-agent-val'], e:[] },
-      { t:'Report and media return to the browser', d:'Read-only by design: nothing has changed in the scene at this point.', p:'fix report + video', n:['n-orch','n-review'], e:['e-res'] },
-      { t:'Review panel shows the run', d:'Simulation playback beside the flagged frames, the issues, the benefits and the recommended fixes.', p:'video · issues · benefits · fixes', n:['n-review'], e:[] },
-      { t:'Director reads and decides', d:'Accept a fix, dismiss it, or go back to the chat and redesign the set outright.', p:'accept | dismiss', n:['n-review','n-director'], e:['e-review'] }
-    ]},
-    { id:'fix', name:'Apply a fix and re-verify', steps:[
-      { t:'Director accepts a fix', d:'An explicit action. The agent never rewrites the scene on its own.', p:'apply  { change_lens: 35mm }', n:['n-director','n-review'], e:['e-review'] },
-      { t:'The fix mutates the scene', d:'A typed fix edits scene_config, the single source the preview and the USD builder both read.', p:"scene_config'", n:['n-orch'], e:['e-loop'] },
-      { t:'The stage is rebuilt, not patched', d:'USD is regenerated from the corrected scene, so the stage cannot drift away from the description.', p:"set.usda'", n:['n-usd','n-store'], e:[] },
-      { t:'Kit re-runs the identical checks', d:'Same shot list, same validation. That is what makes the comparison honest.', p:'re-render + re-validate', n:['n-load','n-physx','n-rtx'], e:['e-sim'] },
-      { t:'Flag counts compared before and after', d:'A fix that fails to clear its flag is reported unresolved rather than quietly dropped.', p:'flags  1 → 0', n:['n-store','n-orch'], e:['e-out'] },
-      { t:'Before / after posted back to chat', d:'The loop closes where it started, and the director can go around again.', p:'"north_top coverage cleared · 1 → 0"', n:['n-chat','n-view','n-review'], e:['e-res'] }
+    { id:'reverify', name:'Apply & re-verify', steps:[
+      { t:'Director clicks Apply Fix', d:'An explicit action -- the fix agent never overwrites the working file on its own.', p:'usdStatus ← fixed_usda_content', n:['n-director','n-review'], e:['e-review'] },
+      { t:'The fixed file becomes the working USD', d:'Same panel, same camera list -- it is just a new .usda now.', p:'usda_path ← fixed_usda_path', n:['n-view'], e:['e-loop'] },
+      { t:'Validate & Simulate runs again', d:'The exact same GPU pipeline as before, not a lighter re-check -- that is what makes the before/after comparison honest.', p:'POST /validate-usd  (same shape as before)', n:['n-orch','n-load','n-physx','n-rtx'], e:['e-sim'] },
+      { t:'Fresh results land in S3 again', d:'A new scene_id, new presigned URLs -- the previous run is not overwritten.', p:'s3://renders/{new scene_id}/...', n:['n-rtx','n-s3'], e:['e-s3'] },
+      { t:'Flag counts compared before and after', d:'A fix that does not actually clear its flag shows up as still-flagged, not silently dropped.', p:'violations  N → 0', n:['n-store','n-orch'], e:['e-out'] },
+      { t:'Director sees the real result', d:'The loop closes where it started -- go again, or move on to the next shot.', p:'render + updated flags', n:['n-review'], e:['e-res'] }
     ]}
   ];
 
   const GROUP_OF = {
     'n-chat':'g-web','n-view':'g-web','n-review':'g-web',
     'n-orch':'g-api','n-usd':'g-api','n-store':'g-api',
-    'n-load':'g-gpu','n-physx':'g-gpu','n-rtx':'g-gpu'
+    'n-load':'g-gpu','n-physx':'g-gpu','n-rtx':'g-gpu','n-s3':'g-gpu'
   };
 
   const svg = document.getElementById('dg');
@@ -725,7 +1028,7 @@ body.locked{overflow:hidden}
     });
   }
 
-  function render(){
+  function renderFlow(){
     if(!flow){
       counter.textContent = '·· / ··';
       list.innerHTML = '';
@@ -760,66 +1063,65 @@ body.locked{overflow:hidden}
       const b = document.createElement('button');
       b.type = 'button';
       b.innerHTML = '<span class="n">' + String(i+1).padStart(2,'0') + '</span><span>' + s.t + '</span>';
-      b.addEventListener('click', function(){ pause(); idx = i; render(); });
+      b.addEventListener('click', function(){ pauseFlow(); idx = i; renderFlow(); });
       li.appendChild(b); list.appendChild(li);
     });
   }
 
   function selectFlow(id, autoplay){
-    pause();
+    pauseFlow();
     flow = FLOWS.find(function(f){ return f.id === id; });
     idx = 0;
     Array.prototype.forEach.call(tabs.children, function(b){
       b.setAttribute('aria-pressed', String(b.dataset.id === id));
     });
     buildList();
-    render();
-    if(autoplay) play();
+    renderFlow();
+    if(autoplay) playFlow();
   }
 
   function tick(){
     if(!flow) return;
-    if(idx >= flow.steps.length - 1){ pause(); return; }
-    idx++; render();
+    if(idx >= flow.steps.length - 1){ pauseFlow(); return; }
+    idx++; renderFlow();
   }
 
-  function play(){
+  function playFlow(){
     if(!flow) selectFlow(FLOWS[0].id, false);
     if(idx >= flow.steps.length - 1) idx = 0;
-    render();
+    renderFlow();
     clearInterval(timer);
     timer = setInterval(tick, parseInt(spd.value, 10));
     bPlay.textContent = 'Pause';
   }
 
-  function pause(){
+  function pauseFlow(){
     clearInterval(timer); timer = null;
     bPlay.textContent = 'Play';
   }
 
-  bPlay.addEventListener('click', function(){ timer ? pause() : play(); });
-  bNext.addEventListener('click', function(){ pause(); if(flow && idx < flow.steps.length - 1){ idx++; render(); } });
-  bPrev.addEventListener('click', function(){ pause(); if(flow && idx > 0){ idx--; render(); } });
+  bPlay.addEventListener('click', function(){ timer ? pauseFlow() : playFlow(); });
+  bNext.addEventListener('click', function(){ pauseFlow(); if(flow && idx < flow.steps.length - 1){ idx++; renderFlow(); } });
+  bPrev.addEventListener('click', function(){ pauseFlow(); if(flow && idx > 0){ idx--; renderFlow(); } });
   bStop.addEventListener('click', function(){
-    pause(); flow = null; idx = -1;
+    pauseFlow(); flow = null; idx = -1;
     Array.prototype.forEach.call(tabs.children, function(b){ b.setAttribute('aria-pressed','false'); });
-    render();
+    renderFlow();
   });
-  spd.addEventListener('change', function(){ if(timer){ play(); } });
+  spd.addEventListener('change', function(){ if(timer){ playFlow(); } });
 
-  /* ---------- fullscreen ---------- */
-  function isFull(){ return stage.classList.contains('full'); }
+  /* ---------- diagram-card-only fullscreen ---------- */
+  function isDiagramFull(){ return stage.classList.contains('full'); }
 
-  function syncFs(){
-    const on = isFull();
+  function syncDiagramFs(){
+    const on = isDiagramFull();
     bFs.textContent = on ? '⤡ Exit fullscreen' : '⤢ Fullscreen';
     bFs.setAttribute('aria-pressed', String(on));
-    document.body.classList.toggle('locked', on);
   }
 
-  function enterFs(){
+  function enterDiagramFs(){
     stage.classList.add('full');
-    syncFs();
+    syncDiagramFs();
     if(stage.requestFullscreen){
       stage.requestFullscreen().catch(function(){ /* sandboxed: the CSS overlay already covers it */ });
     } else if(stage.webkitRequestFullscreen){
@@ -827,34 +1129,26 @@ body.locked{overflow:hidden}
     }
   }
 
-  function exitFs(){
+  function exitDiagramFs(){
     stage.classList.remove('full');
-    syncFs();
+    syncDiagramFs();
     const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if(fsEl){
+    if(fsEl === stage){
       if(document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
       else if(document.webkitExitFullscreen){ try{ document.webkitExitFullscreen(); }catch(e){} }
     }
   }
 
-  bFs.addEventListener('click', function(){ isFull() ? exitFs() : enterFs(); });
+  bFs.addEventListener('click', function(){ isDiagramFull() ? exitDiagramFs() : enterDiagramFs(); });
 
-  let nativeOn = false;
-  function onFsChange(){
+  let diagramNativeOn = false;
+  function onDiagramFsChange(){
     const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if(fsEl === stage){ nativeOn = true; return; }
-    if(nativeOn){ nativeOn = false; stage.classList.remove('full'); syncFs(); }
+    if(fsEl === stage){ diagramNativeOn = true; return; }
+    if(diagramNativeOn){ diagramNativeOn = false; stage.classList.remove('full'); syncDiagramFs(); }
   }
-  document.addEventListener('fullscreenchange', onFsChange);
-  document.addEventListener('webkitfullscreenchange', onFsChange);
-
-  document.addEventListener('keydown', function(ev){
-    if(ev.key === 'Escape' && isFull()){ exitFs(); return; }
-    if(!isFull()) return;
-    if(ev.key === 'ArrowRight'){ ev.preventDefault(); bNext.click(); }
-    else if(ev.key === 'ArrowLeft'){ ev.preventDefault(); bPrev.click(); }
-    else if(ev.key === ' '){ ev.preventDefault(); bPlay.click(); }
-  });
+  document.addEventListener('fullscreenchange', onDiagramFsChange);
+  document.addEventListener('webkitfullscreenchange', onDiagramFsChange);
 
   /* ---------- theme switch ---------- */
   const themectl = document.getElementById('themectl');
@@ -872,8 +1166,112 @@ body.locked{overflow:hidden}
   });
   setTheme(root.getAttribute('data-theme') || 'auto');
 
-  render();
-  syncFs();
+  /* =====================================================================
+     DECK — slide-by-slide presentation shell wrapping everything above.
+     Independent of the diagram's own fullscreen (which zooms just that
+     card); this presents the whole page one slide at a time and can also
+     go fullscreen via the Fullscreen API.
+  ===================================================================== */
+  const deck = document.getElementById('deck');
+  const slidesEl = document.getElementById('slides');
+  const slides = Array.prototype.slice.call(slidesEl.querySelectorAll('.slide'));
+  const deckCount = document.getElementById('deckCount');
+  const deckProgressFill = document.getElementById('deckProgressFill');
+  const deckDots = document.getElementById('deckDots');
+  const deckPrev = document.getElementById('deckPrev');
+  const deckNext = document.getElementById('deckNext');
+  const deckFs = document.getElementById('deckFs');
+
+  let slideIdx = 0;
+
+  slides.forEach(function(_, i){
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+    dot.addEventListener('click', function(){ goToSlide(i); });
+    deckDots.appendChild(dot);
+  });
+  const dots = Array.prototype.slice.call(deckDots.children);
+
+  function renderDeck(){
+    slides.forEach(function(s, i){ s.classList.toggle('active', i === slideIdx); });
+    dots.forEach(function(d, i){ d.setAttribute('aria-current', String(i === slideIdx)); });
+    deckCount.textContent = (slideIdx + 1) + ' / ' + slides.length;
+    deckProgressFill.style.width = (((slideIdx + 1) / slides.length) * 100) + '%';
+    deckPrev.disabled = slideIdx === 0;
+    deckNext.disabled = slideIdx === slides.length - 1;
+    slidesEl.scrollTop = 0;
+    if(slides[slideIdx]) slides[slideIdx].scrollTop = 0;
+  }
+
+  function goToSlide(i){
+    slideIdx = Math.max(0, Math.min(slides.length - 1, i));
+    renderDeck();
+  }
+
+  deckPrev.addEventListener('click', function(){ goToSlide(slideIdx - 1); });
+  deckNext.addEventListener('click', function(){ goToSlide(slideIdx + 1); });
+
+  function isPresenting(){ return deck.classList.contains('present'); }
+
+  function syncDeckFs(){
+    const on = isPresenting();
+    deckFs.textContent = on ? '⤡ Exit present' : '⤢ Present';
+    deckFs.setAttribute('aria-pressed', String(on));
+    document.body.classList.toggle('locked', on);
+  }
+
+  function enterPresent(){
+    deck.classList.add('present');
+    syncDeckFs();
+    if(deck.requestFullscreen){
+      deck.requestFullscreen().catch(function(){ /* sandboxed: the CSS overlay already covers it */ });
+    } else if(deck.webkitRequestFullscreen){
+      try{ deck.webkitRequestFullscreen(); }catch(e){}
+    }
+  }
+
+  function exitPresent(){
+    deck.classList.remove('present');
+    syncDeckFs();
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if(fsEl === deck){
+      if(document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
+      else if(document.webkitExitFullscreen){ try{ document.webkitExitFullscreen(); }catch(e){} }
+    }
+  }
+
+  deckFs.addEventListener('click', function(){ isPresenting() ? exitPresent() : enterPresent(); });
+
+  let deckNativeOn = false;
+  function onDeckFsChange(){
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if(fsEl === deck){ deckNativeOn = true; return; }
+    if(deckNativeOn){ deckNativeOn = false; deck.classList.remove('present'); syncDeckFs(); }
+  }
+  document.addEventListener('fullscreenchange', onDeckFsChange);
+  document.addEventListener('webkitfullscreenchange', onDeckFsChange);
+
+  document.addEventListener('keydown', function(ev){
+    // The diagram's own fullscreen mode owns arrow/space/esc for stepping
+    // through a flow -- don't let deck-level navigation fight it.
+    if(isDiagramFull()){
+      if(ev.key === 'Escape') exitDiagramFs();
+      return;
+    }
+    if(ev.key === 'Escape' && isPresenting()){ exitPresent(); return; }
+    if(ev.target && /^(SELECT|INPUT|TEXTAREA)$/.test(ev.target.tagName)) return;
+    if(ev.key === 'ArrowRight' || ev.key === 'PageDown'){ ev.preventDefault(); goToSlide(slideIdx + 1); }
+    else if(ev.key === 'ArrowLeft' || ev.key === 'PageUp'){ ev.preventDefault(); goToSlide(slideIdx - 1); }
+    else if(ev.key === ' '){ ev.preventDefault(); goToSlide(slideIdx + 1); }
+    else if(ev.key === 'Home'){ ev.preventDefault(); goToSlide(0); }
+    else if(ev.key === 'End'){ ev.preventDefault(); goToSlide(slides.length - 1); }
+  });
+
+  renderDeck();
+  renderFlow();
+  syncDiagramFs();
+  syncDeckFs();
 })();
 </script>
 
