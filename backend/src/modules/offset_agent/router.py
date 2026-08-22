@@ -6,9 +6,12 @@ Scoped cleanly under /offset prefix and root /api aliases.
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import traceback
 import uuid
 from typing import Annotated, Any
@@ -26,14 +29,19 @@ from modules.offset_agent.models import (
     GenerateUSDRequest,
     GenerateUSDResponse,
     IngestKitOutputRequest,
+    ListUsdCamerasRequest,
+    ListUsdCamerasResponse,
     ProposeFixRequest,
     ProposeFixResponse,
     RenderRequest,
     RenderStatusResponse,
     SceneConfigSchema,
     USDScriptChatRequest,
+    UsdCameraInfo,
+    ValidateUSDJobResponse,
     ValidateUSDRequest,
     ValidateUSDResponse,
+    ValidateUSDStatusResponse,
 )
 from modules.offset_agent.usd_exporter import generate_usd_from_config, generate_usd_from_scene
 from modules.offset_agent.usd_script_agent import generate_usd_file_from_prompt
@@ -66,6 +74,10 @@ def _upload_dir_to_s3_and_clear(local_dir: str, bucket: str, prefix: str, url_ex
     and ONLY on full success deletes local_dir -- if any upload fails, nothing
     local is removed, so a bucket/permissions problem never loses render output.
     Returns {filename: presigned_get_url}.
+
+    Raises plain RuntimeError (not HTTPException) -- this runs inside the
+    /validate-usd background thread, not a request handler, so there's no
+    response to raise an HTTPException into.
     """
     s3 = boto3.client("s3", region_name=AWS_REGION)
     filenames = [f for f in os.listdir(local_dir) if os.path.isfile(os.path.join(local_dir, f))]
@@ -81,7 +93,7 @@ def _upload_dir_to_s3_and_clear(local_dir: str, bucket: str, prefix: str, url_ex
                 ExpiresIn=url_expiry_seconds,
             )
     except (BotoCoreError, ClientError) as e:
-        raise HTTPException(status_code=500, detail=f"S3 upload to 's3://{bucket}/{prefix}' failed: {str(e)}")
+        raise RuntimeError(f"S3 upload to 's3://{bucket}/{prefix}' failed: {e!s}")
 
     shutil.rmtree(local_dir)
     return urls
@@ -93,6 +105,184 @@ def _resolve_renders_dir() -> str:
     if os.path.exists(ubuntu_renders) or os.access("/home/ubuntu", os.W_OK):
         return ubuntu_renders
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "renders"))
+
+
+def _violations_to_collision_flags(validation_result: dict) -> list[dict]:
+    """
+    Flattens standalone_render_and_validate.py's validation_result.json shape
+    ({status, violations: [{frame, corner, prim}], camera_collisions: [{frame, colliding_with}]})
+    into the flat collision_flags shape fix_agent.py / /propose-fix / the UI
+    already expect: {type, frame, corner?, prim?, colliding_with?}.
+    """
+    collision_flags: list[dict] = []
+    for v in validation_result.get("violations", []):
+        collision_flags.append({
+            "type": "frustum_off_set" if v.get("prim") else "frustum_escaped",
+            "frame": v.get("frame"),
+            "corner": v.get("corner"),
+            "prim": v.get("prim"),
+        })
+    for c in validation_result.get("camera_collisions", []):
+        collision_flags.append({
+            "type": "camera_body_collision",
+            "frame": c.get("frame"),
+            "colliding_with": c.get("colliding_with"),
+        })
+    return collision_flags
+
+
+def _validate_jobs_dir() -> str:
+    d = os.path.join(_resolve_renders_dir(), "_validate_jobs")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _write_job_status(scene_id: str, data: dict) -> None:
+    """Atomic write (tmp file + os.replace) so a concurrent GET status never reads a torn file."""
+    path = os.path.join(_validate_jobs_dir(), f"{scene_id}.json")
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp_path, path)
+
+
+def _read_job_status(scene_id: str) -> dict | None:
+    path = os.path.join(_validate_jobs_dir(), f"{scene_id}.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _tail_file(path: str, n: int = 40) -> str:
+    try:
+        with open(path, "r") as f:
+            return "".join(f.readlines()[-n:])
+    except OSError:
+        return ""
+
+
+def _run_validate_job(
+    usda_path: str, scene_id: str, out_dir: str,
+    camera: str, frames: str, fps: float, renderer: str, warmup: int,
+) -> None:
+    """
+    The actual Isaac Sim render+validate+stitch+S3-upload pipeline, run in a
+    background thread by POST /validate-usd. Never raises -- every failure
+    path is captured into the job's sidecar status file (via _fail below)
+    since there's no HTTP request left to raise an HTTPException into.
+    """
+    log_path = os.path.join(out_dir, "validate.log")
+    started_at = time.time()
+
+    def _fail(error: str, log_tail: str = "") -> None:
+        _write_job_status(scene_id, {
+            "status": "failed",
+            "scene_id": scene_id,
+            "error": error,
+            "log_tail": log_tail,
+            "started_at": started_at,
+            "finished_at": time.time(),
+        })
+
+    _write_job_status(scene_id, {
+        "status": "running",
+        "scene_id": scene_id,
+        "usda_path": usda_path,
+        "started_at": started_at,
+    })
+
+    cmd = [
+        ISAAC_SIM_PYTHON, STANDALONE_VALIDATE_SCRIPT,
+        "--usd", usda_path,
+        "--out", out_dir,
+        "--camera", camera,
+        "--frames", frames,
+        "--warmup", str(warmup),
+        "--renderer", renderer,
+    ]
+
+    # Popen + a real (unbuffered) file handle, not subprocess.run(capture_output=True),
+    # so validate.log fills in live as Isaac Sim prints "captured frame N" -- this is
+    # what lets GET .../status report progress while the job is still running.
+    # PYTHONUNBUFFERED=1 is required because the script's own print() calls would
+    # otherwise sit in Python's block-buffered stdout until the process exits.
+    try:
+        with open(log_path, "w") as log_file:
+            proc = subprocess.Popen(
+                cmd, stdout=log_file, stderr=subprocess.STDOUT, text=True,
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            )
+            try:
+                returncode = proc.wait(timeout=900)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                _fail(f"standalone_render_and_validate.py timed out after 900s for '{usda_path}'.", _tail_file(log_path))
+                return
+    except OSError as e:
+        _fail(f"Failed to launch standalone_render_and_validate.py: {e!s}")
+        return
+
+    if returncode != 0:
+        _fail(f"standalone_render_and_validate.py failed (exit {returncode}).", _tail_file(log_path))
+        return
+
+    validation_json_path = os.path.join(out_dir, "validation_result.json")
+    if not os.path.exists(validation_json_path):
+        _fail(f"Run completed with exit 0 but '{validation_json_path}' was not written.", _tail_file(log_path))
+        return
+    with open(validation_json_path, "r") as f:
+        validation_result = json.load(f)
+
+    frame_files = sorted(glob.glob(os.path.join(out_dir, "rgb_*.png")))
+    if not frame_files:
+        _fail(f"No rendered frames found in '{out_dir}' after a successful run.", _tail_file(log_path))
+        return
+
+    video_path = os.path.join(out_dir, f"{scene_id}.mp4")
+    video_cmd = [
+        sys.executable, FRAMES_TO_VIDEO_SCRIPT,
+        "--frames_dir", out_dir,
+        "--fps", str(fps),
+        "--out", video_path,
+    ]
+    video_res = subprocess.run(video_cmd, timeout=120, capture_output=True, text=True, check=False)
+    if video_res.returncode != 0 or not os.path.exists(video_path):
+        stderr_detail = video_res.stderr.strip() or video_res.stdout.strip() or "Unknown ffmpeg failure"
+        _fail(f"frames_to_video.py failed (exit {video_res.returncode}): {stderr_detail}")
+        return
+
+    frame_count = len(frame_files)
+    video_filename = os.path.basename(video_path)
+    collision_flags = _violations_to_collision_flags(validation_result)
+    s3_prefix = f"{scene_id}/"
+
+    try:
+        presigned_urls = _upload_dir_to_s3_and_clear(out_dir, S3_RENDERS_BUCKET, s3_prefix)
+    except RuntimeError as e:
+        # out_dir is left intact on failure (rmtree only runs on full success),
+        # so nothing local is lost even though the job is marked failed.
+        _fail(str(e))
+        return
+
+    _write_job_status(scene_id, {
+        "status": "done",
+        "scene_id": scene_id,
+        "usda_path": usda_path,
+        "render_files": [presigned_urls[os.path.basename(p)] for p in frame_files],
+        "video_file": presigned_urls.get(video_filename),
+        "frame_count": frame_count,
+        "validation_result": validation_result,
+        "collision_flags": collision_flags,
+        "s3_bucket": S3_RENDERS_BUCKET,
+        "s3_prefix": s3_prefix,
+        "started_at": started_at,
+        "finished_at": time.time(),
+    })
 
 
 @router.get("/health")
@@ -161,7 +351,14 @@ def generate_usd_file_from_chat(request: USDScriptChatRequest):
             generation.path,
             media_type="model/vnd.usda",
             filename=output_filename if output_filename.endswith(".usda") else f"{output_filename}.usda",
-            headers={"X-Offset-USD-Source": generation.source},
+            headers={
+                "X-Offset-USD-Source": generation.source,
+                # Exposes the server-side path so the frontend can point
+                # /validate-usd and /list-usd-cameras at this exact file
+                # (previously only the downloadable blob was returned, with no
+                # way for the caller to reference it server-side afterward).
+                "X-Offset-USD-Path": generation.path,
+            },
         )
     except Exception as e:  # noqa: BLE001 - API boundary maps generator failures to HTTP 500.
         traceback.print_exc()
@@ -325,11 +522,10 @@ def ingest_kit_output(request: IngestKitOutputRequest):
     # If explicit collision_flags weren't passed in the request, look for a
     # validation_result.json sitting alongside the renders -- this is what
     # kit_bridge_extension.py's action_run_validation / standalone_render_and_validate.py
-    # write on a real Isaac Sim run: {status, violations: [{frame, corner, prim}],
-    # camera_collisions: [{frame, colliding_with}]}. Flatten it into the same
-    # flat collision_flags shape the UI and fix_agent already expect, so a real
-    # Isaac Sim collision run reaches both the render tab and the fix reasoning
-    # in one ingest call, without requiring the operator to hand-copy JSON.
+    # write on a real Isaac Sim run. Flatten it into the same flat collision_flags
+    # shape the UI and fix_agent already expect, so a real Isaac Sim collision run
+    # reaches both the render tab and the fix reasoning in one ingest call, without
+    # requiring the operator to hand-copy JSON.
     collision_flags = list(request.collision_flags)
     if not collision_flags:
         validation_path = os.path.join(source_dir, "validation_result.json")
@@ -339,20 +535,7 @@ def ingest_kit_output(request: IngestKitOutputRequest):
                     validation_data = json.load(f)
             except (json.JSONDecodeError, OSError):
                 validation_data = {}
-
-            for v in validation_data.get("violations", []):
-                collision_flags.append({
-                    "type": "frustum_off_set" if v.get("prim") else "frustum_escaped",
-                    "frame": v.get("frame"),
-                    "corner": v.get("corner"),
-                    "prim": v.get("prim"),
-                })
-            for c in validation_data.get("camera_collisions", []):
-                collision_flags.append({
-                    "type": "camera_body_collision",
-                    "frame": c.get("frame"),
-                    "colliding_with": c.get("colliding_with"),
-                })
+            collision_flags = _violations_to_collision_flags(validation_data)
 
     result_data = {
         "status": "SUCCESS",
@@ -372,22 +555,63 @@ def ingest_kit_output(request: IngestKitOutputRequest):
     return result_data
 
 
-@router.post("/validate-usd", response_model=ValidateUSDResponse)
+@router.post("/list-usd-cameras", response_model=ListUsdCamerasResponse)
+def list_usd_cameras(request: ListUsdCamerasRequest):
+    """
+    POST /list-usd-cameras
+    Opens a .usda/.usd file with plain pxr.Usd (no Isaac Sim/Kit needed -- this
+    is pure USD introspection, not a render) and returns every Camera prim it
+    actually contains. Some USD files have no camera at all -- e.g. an
+    externally-authored stage, or one built by a path that skipped adding
+    one -- so the UI should not assume "/World/MainCamera" exists; this is
+    what lets the Validate & Simulate camera picker reflect the real file
+    instead of guessing from the (possibly stale/unrelated) in-memory scene.
+    """
+    usda_path = os.path.abspath(request.usda_path)
+    if not os.path.isfile(usda_path):
+        raise HTTPException(status_code=400, detail=f"usda_path '{usda_path}' does not exist.")
+
+    try:
+        from pxr import Usd, UsdGeom
+    except ImportError:
+        raise HTTPException(status_code=500, detail="pxr (usd-core) is not installed on this backend.")
+
+    try:
+        stage = Usd.Stage.Open(usda_path)
+    except Exception as e:  # noqa: BLE001 - API boundary maps any pxr parse failure to HTTP 400.
+        raise HTTPException(status_code=400, detail=f"Failed to open USD stage '{usda_path}': {e!s}")
+    if stage is None:
+        raise HTTPException(status_code=400, detail=f"Failed to open USD stage '{usda_path}' (Usd.Stage.Open returned None).")
+
+    cameras = [
+        UsdCameraInfo(path=str(prim.GetPath()), name=prim.GetName())
+        for prim in stage.Traverse()
+        if prim.IsA(UsdGeom.Camera)
+    ]
+
+    return ListUsdCamerasResponse(usda_path=usda_path, cameras=cameras)
+
+
+@router.post("/validate-usd", response_model=ValidateUSDJobResponse)
 def validate_usd_stage(request: ValidateUSDRequest):
     """
     POST /validate-usd
-    Runs scenes/standalone_render_and_validate.py against a .usda file already
-    on this machine via Isaac Sim's own Python (real headless SimulationApp,
-    not the kit_render_worker.py placeholder path): opens the stage, renders
-    the requested frames of --camera through RTX, runs the same PhysX-based
-    shot validator the live bridge uses (action_run_validation), stitches the
-    resulting rgb_*.png sequence into an MP4 via frames_to_video.py, and
-    returns render/video URLs plus the validation result.
+    Kicks off scenes/standalone_render_and_validate.py against a .usda file
+    already on this machine, in a background thread, and returns immediately.
 
-    Synchronous -- this blocks for the duration of the Isaac Sim subprocess,
-    which can legitimately take minutes (a cold shader cache on first run
-    alone costs ~100s; see ARCHITECTURE.md). warmup=20 is enough for
-    RayTracedLighting -- only raise it substantially for PathTracing.
+    This is a REAL headless Isaac Sim run (RTX render through --camera + the
+    same PhysX-based shot validator the live bridge uses), which can
+    legitimately take minutes (a cold shader cache on first run alone costs
+    ~100s; see ARCHITECTURE.md) -- far too long to hold an HTTP request open.
+    Poll GET /validate-usd/{scene_id}/status for progress and the final result.
+
+    Deliberately a plain daemon thread, not FastAPI's BackgroundTasks: those
+    share the same request threadpool, and a 15-20 minute job would starve
+    every other synchronous endpoint on this server. This repo has no task
+    queue (Celery/RQ) and doesn't need one yet -- a thread plus a filesystem
+    sidecar (see _run_validate_job / _write_job_status) is the minimal
+    increment consistent with the rest of this router's "no DB, just files"
+    convention (mirrors /render + /render/{scene_id}/status).
     """
     usda_path = os.path.abspath(request.usda_path)
     if not os.path.isfile(usda_path):
@@ -404,69 +628,87 @@ def validate_usd_stage(request: ValidateUSDRequest):
     scene_id = request.scene_id or f"{os.path.splitext(os.path.basename(usda_path))[0]}_{uuid.uuid4().hex[:8]}"
     out_dir = os.path.join(_resolve_renders_dir(), scene_id)
     os.makedirs(out_dir, exist_ok=True)
-    log_path = os.path.join(out_dir, "validate.log")
 
-    cmd = [
-        ISAAC_SIM_PYTHON, STANDALONE_VALIDATE_SCRIPT,
-        "--usd", usda_path,
-        "--out", out_dir,
-        "--camera", request.camera,
-        "--frames", request.frames,
-        "--warmup", str(request.warmup),
-        "--renderer", request.renderer,
-    ]
-    try:
-        res = subprocess.run(cmd, timeout=900, capture_output=True, text=True, check=False)
-        with open(log_path, "w") as f_log:
-            f_log.write(f"=== STDOUT ===\n{res.stdout}\n\n=== STDERR ===\n{res.stderr}\n")
-        if res.returncode != 0:
-            stderr_detail = res.stderr.strip() or res.stdout.strip() or "Unknown worker failure"
-            raise HTTPException(status_code=500, detail=f"standalone_render_and_validate.py failed (exit {res.returncode}):\n{stderr_detail}")
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail=f"standalone_render_and_validate.py timed out after 900s for '{usda_path}'. See '{log_path}'.")
+    _write_job_status(scene_id, {
+        "status": "queued",
+        "scene_id": scene_id,
+        "usda_path": usda_path,
+        "started_at": time.time(),
+    })
 
-    validation_json_path = os.path.join(out_dir, "validation_result.json")
-    if not os.path.exists(validation_json_path):
-        raise HTTPException(status_code=500, detail=f"Run completed with exit 0 but '{validation_json_path}' was not written. See '{log_path}'.")
-    with open(validation_json_path, "r") as f:
-        validation_result = json.load(f)
+    threading.Thread(
+        target=_run_validate_job,
+        args=(usda_path, scene_id, out_dir, request.camera, request.frames, request.fps, request.renderer, request.warmup),
+        daemon=True,
+    ).start()
 
-    frame_files = sorted(glob.glob(os.path.join(out_dir, "rgb_*.png")))
-    if not frame_files:
-        raise HTTPException(status_code=500, detail=f"No rendered frames found in '{out_dir}' after a successful run. See '{log_path}'.")
-
-    video_path = os.path.join(out_dir, f"{scene_id}.mp4")
-    video_cmd = [
-        sys.executable, FRAMES_TO_VIDEO_SCRIPT,
-        "--frames_dir", out_dir,
-        "--fps", str(request.fps),
-        "--out", video_path,
-    ]
-    video_res = subprocess.run(video_cmd, timeout=120, capture_output=True, text=True, check=False)
-    if video_res.returncode != 0 or not os.path.exists(video_path):
-        stderr_detail = video_res.stderr.strip() or video_res.stdout.strip() or "Unknown ffmpeg failure"
-        raise HTTPException(status_code=500, detail=f"frames_to_video.py failed (exit {video_res.returncode}):\n{stderr_detail}")
-
-    frame_count = len(frame_files)
-    video_filename = os.path.basename(video_path)
-
-    # Ship everything in out_dir (frames, video, validation_result.json,
-    # validate.log) to S3 and clear the local copies -- only once every
-    # upload has succeeded, so a bucket/permissions problem never loses
-    # render output that took real Isaac Sim minutes to produce.
-    s3_prefix = f"{scene_id}/"
-    presigned_urls = _upload_dir_to_s3_and_clear(out_dir, S3_RENDERS_BUCKET, s3_prefix)
-
-    return ValidateUSDResponse(
-        status="SUCCESS",
+    return ValidateUSDJobResponse(
         scene_id=scene_id,
-        usda_path=usda_path,
-        render_files=[presigned_urls[os.path.basename(p)] for p in frame_files],
-        video_file=presigned_urls.get(video_filename),
-        frame_count=frame_count,
-        validation_result=validation_result,
-        s3_bucket=S3_RENDERS_BUCKET,
-        s3_prefix=s3_prefix,
+        message=f"Validation job started; poll GET /validate-usd/{scene_id}/status for progress.",
+    )
+
+
+@router.get("/validate-usd/{scene_id}/status", response_model=ValidateUSDStatusResponse)
+def get_validate_usd_status(scene_id: str):
+    """
+    GET /validate-usd/{scene_id}/status
+    Polls the job's sidecar file under renders/_validate_jobs/{scene_id}.json --
+    kept separate from renders/{scene_id}/ because that directory is deleted
+    once the run's output is uploaded to S3, so it can't be the "done" source
+    of truth the way /render/{scene_id}/status uses renders/{scene_id}/result.json.
+    """
+    job = _read_job_status(scene_id)
+    if job is None:
+        return ValidateUSDStatusResponse(status="not_found", scene_id=scene_id, message="No validate-usd job found for this scene_id.")
+
+    status = job.get("status", "not_found")
+    started_at = job.get("started_at")
+    elapsed_seconds = (time.time() - started_at) if started_at else None
+
+    if status == "done":
+        return ValidateUSDStatusResponse(
+            status="done",
+            scene_id=scene_id,
+            elapsed_seconds=elapsed_seconds,
+            result=ValidateUSDResponse(
+                status="SUCCESS",
+                scene_id=scene_id,
+                usda_path=job.get("usda_path", ""),
+                render_files=job.get("render_files", []),
+                video_file=job.get("video_file"),
+                frame_count=job.get("frame_count", 0),
+                validation_result=job.get("validation_result", {}),
+                s3_bucket=job.get("s3_bucket"),
+                s3_prefix=job.get("s3_prefix"),
+                collision_flags=job.get("collision_flags", []),
+            ),
+        )
+
+    if status == "failed":
+        return ValidateUSDStatusResponse(
+            status="failed",
+            scene_id=scene_id,
+            elapsed_seconds=elapsed_seconds,
+            error=job.get("error"),
+            message=job.get("log_tail"),
+        )
+
+    # queued / running -- surface the last "captured frame N" line seen so far.
+    # validate.log fills in live (see _run_validate_job's Popen + PYTHONUNBUFFERED),
+    # so this reflects real progress, not just a stale post-completion dump.
+    current_frame = None
+    log_path = os.path.join(_resolve_renders_dir(), scene_id, "validate.log")
+    if os.path.exists(log_path):
+        matches = re.findall(r"captured frame (\d+)", _tail_file(log_path, 200))
+        if matches:
+            current_frame = int(matches[-1])
+
+    return ValidateUSDStatusResponse(
+        status=status,
+        scene_id=scene_id,
+        current_frame=current_frame,
+        elapsed_seconds=elapsed_seconds,
+        message="Isaac Sim validation in progress." if status == "running" else "Validation job queued.",
     )
 
 

@@ -56,8 +56,14 @@ start() {
   echo "Syncing dependencies (uv sync --extra usd)..."
   uv sync --extra usd
   echo "Starting backend on $HOST:$PORT (log: $LOG_FILE)..."
-  nohup uv run --extra usd uvicorn main:app --host "$HOST" --port "$PORT" --app-dir src \
-    > "$LOG_FILE" 2>&1 &
+  # setsid (not just nohup+&) puts this in its own session/process group --
+  # without it, a non-interactive caller (e.g. scripts/dev.sh, which has no
+  # job control) leaves this process in the SAME process group as the caller,
+  # so killing the caller (Ctrl-C on the frontend, a `timeout`, etc.) takes
+  # the backend down with it. setsid makes the backend genuinely independent,
+  # matching backend.sh's own stop/status/restart lifecycle.
+  setsid nohup uv run --extra usd uvicorn main:app --host "$HOST" --port "$PORT" --app-dir src \
+    > "$LOG_FILE" 2>&1 < /dev/null &
   echo $! > "$PID_FILE"
   sleep 2
   if is_running; then

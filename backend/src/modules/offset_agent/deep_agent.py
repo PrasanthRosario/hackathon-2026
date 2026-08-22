@@ -36,7 +36,13 @@ def run_offset_agent(
     model_preference: str | None = None,
 ) -> ChatResponse:
     scene = current_scene or scene_config_to_spec(current_config)
-    user_text = _user_text(messages)
+    # Only the LATEST message decides whether to (re-)trigger the hardcoded
+    # template scaffold -- using the full conversation history here (as this
+    # used to) means saying "cooking show" even once makes every later turn
+    # in the same conversation permanently re-run the fixed template and
+    # silently discard any follow-up edit request, since the phrase never
+    # leaves the concatenated history.
+    user_text = _latest_user_text(messages)
     if _is_church_open_world_intent(user_text) or _is_cooking_show_intent(user_text):
         return _run_deterministic_scene_agent(messages, scene)
     if not os.getenv("OPENROUTER_API_KEY"):
@@ -133,7 +139,7 @@ def _run_deterministic_scene_agent(
     scene: SceneSpecSchema | None = None,
 ) -> ChatResponse:
     scene = scene or default_scene_spec()
-    latest = _user_text(messages)
+    latest = _latest_user_text(messages)
     operations: list[SceneOperationSchema] = []
 
     if "podcast" in latest or "studio" in latest:
@@ -565,7 +571,7 @@ def _ensure_scene_completion(
     messages: list[ChatMessage],
     scene: SceneSpecSchema,
 ) -> tuple[list[SceneOperationSchema], str | None]:
-    latest = _user_text(messages)
+    latest = _latest_user_text(messages)
     if _is_church_open_world_intent(latest):
         operations = _church_open_world_completion_operations(scene)
         if not operations:
@@ -658,10 +664,6 @@ def _latest_user_text(messages: list[ChatMessage]) -> str:
         if message.role == "user":
             return message.content.lower()
     return ""
-
-
-def _user_text(messages: list[ChatMessage]) -> str:
-    return "\n".join(message.content.lower() for message in messages if message.role == "user")
 
 
 def _fallback_operations_for_visual_intent(

@@ -190,6 +190,20 @@ class ProposeFixResponse(BaseModel):
     model_used: str
 
 
+class UsdCameraInfo(BaseModel):
+    path: str = Field(..., description="Full USD prim path, e.g. '/World/Cameras/WideCam'")
+    name: str = Field(..., description="Prim name only, e.g. 'WideCam'")
+
+
+class ListUsdCamerasRequest(BaseModel):
+    usda_path: str = Field(..., description="Absolute path on this machine to the .usda/.usd file to inspect")
+
+
+class ListUsdCamerasResponse(BaseModel):
+    usda_path: str
+    cameras: list[UsdCameraInfo] = Field(default_factory=list, description="Every Camera prim actually found in the stage -- empty if the USD has none")
+
+
 class ValidateUSDRequest(BaseModel):
     """
     Runs a real headless Isaac Sim pass (scenes/standalone_render_and_validate.py)
@@ -214,6 +228,25 @@ class ValidateUSDResponse(BaseModel):
     validation_result: dict[str, Any] = Field(default_factory=dict, description="Contents of validation_result.json: {status, violations, camera_collisions}")
     s3_bucket: str | None = Field(None, description="S3 bucket the outputs were uploaded to")
     s3_prefix: str | None = Field(None, description="S3 key prefix (folder) the outputs live under, e.g. '{scene_id}/'")
+    collision_flags: list[dict[str, Any]] = Field(default_factory=list, description="validation_result's violations/camera_collisions flattened into the flat shape /propose-fix expects")
+
+
+class ValidateUSDJobResponse(BaseModel):
+    """Immediate ack returned by POST /validate-usd -- the real work runs in a background thread."""
+    status: Literal["queued"] = "queued"
+    scene_id: str
+    message: str
+
+
+class ValidateUSDStatusResponse(BaseModel):
+    """GET /validate-usd/{scene_id}/status -- polls the job's sidecar file on disk."""
+    status: Literal["queued", "running", "done", "failed", "not_found"]
+    scene_id: str
+    message: str | None = None
+    current_frame: int | None = Field(None, description="Last 'captured frame N' seen in the run's log, while running")
+    elapsed_seconds: float | None = None
+    error: str | None = None
+    result: ValidateUSDResponse | None = Field(None, description="Populated only when status == 'done'")
 
 
 class IngestKitOutputRequest(BaseModel):

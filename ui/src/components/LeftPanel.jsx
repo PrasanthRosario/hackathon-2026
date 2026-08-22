@@ -324,8 +324,8 @@ export default function LeftPanel({
                     </button>
                   </div>
                   <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', margin: 0 }}>
-                    Fast heuristic checks only. For real render/physics/coverage validation and fix
-                    verification, use "Render in Kit" in the viewport panel →
+                    Fast heuristic checks only. For a real render + PhysX collision validation
+                    and fix verification, use "Validate & Simulate" in the viewport panel →
                   </p>
                 </div>
               )}

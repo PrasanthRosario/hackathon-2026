@@ -18,6 +18,20 @@ async function postJson(path, payload) {
   return data;
 }
 
+async function getJson(path) {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    const detail = data?.detail || data?.message || response.statusText;
+    throw new Error(`Backend API ${response.status}: ${detail}`);
+  }
+
+  return data;
+}
+
 export function sendChatTurn({ messages, currentConfig, currentScene }) {
   return postJson('/chat', {
     messages,
@@ -46,6 +60,9 @@ export async function downloadUsdFromPrompt({ prompt, messages = [], outputFilen
   return {
     blob,
     source: response.headers.get('X-Offset-USD-Source') || 'unknown',
+    // Server-side path of the file just generated -- lets the caller point
+    // /validate-usd and /list-usd-cameras at exactly this file afterward.
+    path: response.headers.get('X-Offset-USD-Path') || null,
     sizeBytes: blob.size
   };
 }
@@ -66,9 +83,30 @@ export function checkPhysics(sceneConfig) {
   return postJson('/check-physics', sceneConfig);
 }
 
-export function proposeFix({ currentConfig, issues }) {
-  return postJson('/propose-fix', {
-    current_config: currentConfig,
-    issues
+// POST /list-usd-cameras -> opens the given .usda with plain pxr (no Isaac
+// Sim needed) and returns every real Camera prim it contains. Some USD files
+// have no camera at all, so callers must handle an empty list rather than
+// assuming '/World/MainCamera' exists.
+export function listUsdCameras(usdaPath) {
+  return postJson('/list-usd-cameras', { usda_path: usdaPath });
+}
+
+// POST /validate-usd -> kicks off a real headless Isaac Sim render+validate
+// job in the backend and returns immediately with {status: 'queued', scene_id}.
+// This can legitimately take minutes, so the caller polls
+// getValidateSimulateStatus(sceneId) until status is 'done' or 'failed'.
+export function startValidateSimulate({ usdaPath, sceneId, camera, frames, fps, renderer, warmup }) {
+  return postJson('/validate-usd', {
+    usda_path: usdaPath,
+    scene_id: sceneId,
+    ...(camera !== undefined ? { camera } : {}),
+    ...(frames !== undefined ? { frames } : {}),
+    ...(fps !== undefined ? { fps } : {}),
+    ...(renderer !== undefined ? { renderer } : {}),
+    ...(warmup !== undefined ? { warmup } : {}),
   });
+}
+
+export function getValidateSimulateStatus(sceneId) {
+  return getJson(`/validate-usd/${sceneId}/status`);
 }

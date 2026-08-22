@@ -47,6 +47,12 @@ Your task:
   wall-filling views that flatten or hide the set.
 - Keep scale realistic in meters and place primitives above the ground plane. Avoid default 1m cubes at the origin.
 - The generated USDA should be useful in a generic frontend USD viewer, so do not rely on renderer-specific extensions.
+- Every solid primitive that should physically block the camera or a person (floor, walls, counters, furniture,
+  props, vehicles) must carry `prepend apiSchemas = ["PhysicsCollisionAPI"]` in its prim declaration, e.g.
+  `def Cube "Floor" (\n    prepend apiSchemas = ["PhysicsCollisionAPI"]\n)\n{ ... }`. Without this, PhysX has
+  nothing to raycast against and every camera frustum check reports the shot as escaping into empty space, even
+  when the rendered frame looks fully dressed. Purely decorative, non-blocking details (small props on a table,
+  thin foliage) may skip it.
 
 Use the write_usd_python_script_tool exactly once with the complete Python script.
 Return a short final message after the tool call.
@@ -290,7 +296,9 @@ def _extract_prim_blocks(content: str, prim_type: str) -> list[str]:
 
 def _extract_named_prim_blocks(content: str, prim_type: str) -> list[tuple[str, str]]:
     blocks = []
-    pattern = re.compile(rf'def\s+{prim_type}\s+"([^"]+)"\s*\{{')
+    # Optional (...) metadata block (e.g. `prepend apiSchemas = [...]`) can sit
+    # between the quoted name and the opening brace once a prim carries collision.
+    pattern = re.compile(rf'def\s+{prim_type}\s+"([^"]+)"\s*(?:\([^)]*\)\s*)?\{{')
     for match in pattern.finditer(content):
         start = match.start()
         brace_index = content.find("{", match.end() - 1)
@@ -341,7 +349,9 @@ def _generic_room_usd_script() -> str:
 
 def Xform "World"
 {
-    def Cube "Floor"
+    def Cube "Floor" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
     {
         double size = 1
         double3 xformOp:scale = (6, 5, 0.08)
@@ -349,7 +359,9 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
         color3f[] primvars:displayColor = [(0.45, 0.48, 0.5)]
     }
-    def Cube "BackWall"
+    def Cube "BackWall" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
     {
         double size = 1
         double3 xformOp:scale = (6, 0.16, 3)
@@ -374,7 +386,9 @@ def add(line):
     parts.append(line)
 
 def cube(path, name, size, pos, color):
-    add(f'        def Cube "{name}"')
+    add(f'        def Cube "{name}" (')
+    add('            prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add('        )')
     add('        {')
     add('            double size = 1')
     add(f'            double3 xformOp:scale = ({size[0]}, {size[1]}, {size[2]})')
@@ -384,7 +398,9 @@ def cube(path, name, size, pos, color):
     add('        }')
 
 def cyl(name, radius, height, pos, color):
-    add(f'        def Cylinder "{name}"')
+    add(f'        def Cylinder "{name}" (')
+    add('            prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add('        )')
     add('        {')
     add(f'            double radius = {radius}')
     add(f'            double height = {height}')
@@ -395,7 +411,9 @@ def cyl(name, radius, height, pos, color):
     add('        }')
 
 def sphere(name, radius, pos, color):
-    add(f'        def Sphere "{name}"')
+    add(f'        def Sphere "{name}" (')
+    add('            prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add('        )')
     add('        {')
     add(f'            double radius = {radius}')
     add(f'            double3 xformOp:translate = ({pos[0]}, {pos[1]}, {pos[2]})')
@@ -479,7 +497,9 @@ def add(line):
     parts.append(line)
 
 def cube(name, size, pos, color, indent="        "):
-    add(indent + f'def Cube "{name}"')
+    add(indent + f'def Cube "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + "    double size = 1")
     add(indent + f"    double3 xformOp:scale = ({size[0]}, {size[1]}, {size[2]})")
@@ -489,7 +509,9 @@ def cube(name, size, pos, color, indent="        "):
     add(indent + "}")
 
 def cyl(name, radius, height, pos, color, indent="        "):
-    add(indent + f'def Cylinder "{name}"')
+    add(indent + f'def Cylinder "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + f"    double radius = {radius}")
     add(indent + f"    double height = {height}")
@@ -500,7 +522,9 @@ def cyl(name, radius, height, pos, color, indent="        "):
     add(indent + "}")
 
 def sphere(name, radius, pos, color, indent="        "):
-    add(indent + f'def Sphere "{name}"')
+    add(indent + f'def Sphere "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + f"    double radius = {radius}")
     add(indent + f"    double3 xformOp:translate = ({pos[0]}, {pos[1]}, {pos[2]})")
@@ -649,7 +673,9 @@ def safe(value):
     return str(value).replace("-", "n").replace(".", "p")
 
 def cube(name, size, pos, color, indent="        "):
-    add(indent + f'def Cube "{name}"')
+    add(indent + f'def Cube "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + "    double size = 1")
     add(indent + f"    double3 xformOp:scale = ({size[0]}, {size[1]}, {size[2]})")
@@ -659,7 +685,9 @@ def cube(name, size, pos, color, indent="        "):
     add(indent + "}")
 
 def cyl(name, radius, height, pos, color, indent="        "):
-    add(indent + f'def Cylinder "{name}"')
+    add(indent + f'def Cylinder "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + f"    double radius = {radius}")
     add(indent + f"    double height = {height}")
@@ -670,7 +698,9 @@ def cyl(name, radius, height, pos, color, indent="        "):
     add(indent + "}")
 
 def cone(name, radius, height, pos, color, indent="        "):
-    add(indent + f'def Cone "{name}"')
+    add(indent + f'def Cone "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + f"    double radius = {radius}")
     add(indent + f"    double height = {height}")
@@ -681,7 +711,9 @@ def cone(name, radius, height, pos, color, indent="        "):
     add(indent + "}")
 
 def sphere(name, radius, pos, color, indent="        "):
-    add(indent + f'def Sphere "{name}"')
+    add(indent + f'def Sphere "{name}" (')
+    add(indent + '    prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add(indent + ")")
     add(indent + "{")
     add(indent + f"    double radius = {radius}")
     add(indent + f"    double3 xformOp:translate = ({pos[0]}, {pos[1]}, {pos[2]})")
