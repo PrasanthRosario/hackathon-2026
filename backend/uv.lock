@@ -464,6 +464,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "sqlalchemy" },
+    { name = "usd-core" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -472,9 +473,6 @@ dev = [
     { name = "httpx2" },
     { name = "pytest" },
     { name = "ruff" },
-]
-usd = [
-    { name = "usd-core" },
 ]
 
 [package.metadata]
@@ -491,10 +489,10 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "usd-core", marker = "extra == 'usd'", specifier = ">=24.8" },
+    { name = "usd-core", specifier = ">=24.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["dev", "usd"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "google-auth"

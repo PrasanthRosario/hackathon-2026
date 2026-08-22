@@ -415,26 +415,26 @@ def generate_usd_file_from_prompt(
         script = _fallback_usd_script(prompt)
 
     try:
-        usd_content = _run_usd_script(script, prompt=prompt)
+        usd_content = _run_usd_script(script, prompt=prompt, require_pxr=(source == "llm-deepagent"))
     except Exception as first_error:
         if source != "llm-deepagent":
             raise
         # One bounded repair attempt before giving up on the LLM path entirely --
-        # tells the model exactly what broke (usually: it reached for the real
-        # pxr/Usd API instead of hand-writing USDA text, which the sandbox
-        # rejects) and asks for a corrected script. Exactly one retry, not a
-        # loop, so this can't turn into the same runaway-round-trips problem
-        # the old deep-agent architecture had.
+        # tells the model exactly what broke (usually: it hand-wrote raw USDA
+        # text instead of using the real pxr API, or reached for a blocked
+        # import/disk call) and asks for a corrected script. Exactly one
+        # retry, not a loop, so this can't turn into the same
+        # runaway-round-trips problem the old deep-agent architecture had.
         try:
             print(f"[usd_script_agent] LLM script failed validation for prompt {prompt!r} ({first_error}); attempting one repair round-trip:")
             script = _repair_script_with_llm(prompt, script, first_error)
-            usd_content = _run_usd_script(script, prompt=prompt)
+            usd_content = _run_usd_script(script, prompt=prompt, require_pxr=True)
         except Exception:
             print(f"[usd_script_agent] LLM repair attempt also failed for prompt {prompt!r}, falling back to deterministic template:")
             traceback.print_exc()
             source = "deterministic-fallback"
             script = _fallback_usd_script(prompt)
-            usd_content = _run_usd_script(script, prompt=prompt)
+            usd_content = _run_usd_script(script, prompt=prompt, require_pxr=False)
     out_path = _write_usd_file(usd_content, output_filename)
     return USDGenerationResult(path=out_path, script=script, source=source)
 
@@ -555,8 +555,8 @@ def _call_script_tool(conversation: list[dict], prompt: str) -> str:
     raise USDScriptError("USD script agent did not call the script tool.")
 
 
-def _run_usd_script(script: str, prompt: str | None = None) -> str:
-    _validate_script_ast(script)
+def _run_usd_script(script: str, prompt: str | None = None, require_pxr: bool = True) -> str:
+    _validate_script_ast(script, require_pxr=require_pxr)
     with tempfile.TemporaryDirectory(prefix="offset-usd-script-") as temp_dir:
         script_path = os.path.join(temp_dir, "generate_usd.py")
         runner_path = os.path.join(temp_dir, "runner.py")
@@ -646,10 +646,16 @@ _ALLOWED_IMPORT_ROOTS = {"pxr"}
 _BLOCKED_USD_METHODS = {"CreateNew", "Save", "SaveSession", "Export", "ExportToFile", "Flatten"}
 
 
-def _validate_script_ast(script: str) -> None:
+def _validate_script_ast(script: str, require_pxr: bool = True) -> None:
+    """require_pxr=False is for the deterministic fallback templates only
+    -- they intentionally hand-write raw USDA text (no pxr, no imports at
+    all) as a dependency-free last resort, so the "must actually import
+    pxr" check below would otherwise reject the very safety net that's
+    supposed to always work."""
     tree = ast.parse(script)
     blocked_calls = {"eval", "exec", "open", "compile", "input", "__import__"}
     blocked_nodes = (ast.With, ast.AsyncWith, ast.Lambda)
+    saw_pxr_import = False
 
     for node in ast.walk(tree):
         if isinstance(node, blocked_nodes):
@@ -659,10 +665,12 @@ def _validate_script_ast(script: str) -> None:
                 root = alias.name.split(".", 1)[0]
                 if root not in _ALLOWED_IMPORT_ROOTS:
                     raise USDScriptError(f"Generated script imports '{alias.name}' -- only pxr and its submodules are permitted.")
+                saw_pxr_import = True
         if isinstance(node, ast.ImportFrom):
             root = (node.module or "").split(".", 1)[0]
             if root not in _ALLOWED_IMPORT_ROOTS:
                 raise USDScriptError(f"Generated script imports from '{node.module}' -- only pxr and its submodules are permitted.")
+            saw_pxr_import = True
         if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
             raise USDScriptError("Generated script uses blocked dunder access.")
         if isinstance(node, ast.Attribute) and node.attr in _BLOCKED_USD_METHODS:
@@ -672,6 +680,20 @@ def _validate_script_ast(script: str) -> None:
             )
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in blocked_calls:
             raise USDScriptError(f"Generated script calls blocked function {node.func.id}.")
+
+    if require_pxr and not saw_pxr_import:
+        # Nothing here actually forbids hand-writing raw USDA text via
+        # string concatenation (it needs no imports at all, so the import
+        # allowlist above never triggers on it) -- which is exactly how
+        # this used to work, before pxr was permitted. Without this check
+        # the model can silently fall back to that old habit and skip the
+        # entire point of switching to the real API: real UsdShade
+        # materials, real schema validation, the worked example's pattern.
+        raise USDScriptError(
+            "Generated script never imports pxr -- it must build the stage through the real "
+            "Usd/UsdGeom/UsdShade/UsdPhysics/Gf API (see the worked example), not by hand-writing "
+            "USDA text as strings."
+        )
 
 
 def _validate_usda_content(content: str, prompt: str | None = None) -> None:
