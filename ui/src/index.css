@@ -1,4 +1,4 @@
-/* Modern, Smooth & Spacious Design System for Offset Film Pre-Viz Tool */
+/* Modern, Smooth & Spacious Design System for Off Frame Film Pre-Viz Tool */
 
 :root {
   /* Slate & Glass Theme */
@@ -27,6 +27,7 @@
   --font-heading: 'Outfit', 'Space Grotesk', -apple-system, sans-serif;
   --font-body: 'Inter', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  --font-brand: 'Bebas Neue', var(--font-heading);
 }
 
 * {

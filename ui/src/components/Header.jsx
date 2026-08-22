@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Box, Cpu, Sparkles, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Film, Cpu, Sparkles, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 function getRouteLabel(currentModel) {
   if (!currentModel) return 'haiku-latest';
@@ -8,7 +8,7 @@ function getRouteLabel(currentModel) {
   return currentModel.split('/')[1] || currentModel;
 }
 
-export default function Header({ currentModel, usdStatus, onLoadPreset }) {
+export default function Header({ currentModel, usdStatus }) {
   return (
     <header style={{
       height: '62px',
@@ -33,13 +33,13 @@ export default function Header({ currentModel, usdStatus, onLoadPreset }) {
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          fontFamily: 'var(--font-heading)',
-          fontWeight: 800,
-          fontSize: '17px',
-          letterSpacing: '0.5px'
+          fontFamily: 'var(--font-brand)',
+          fontWeight: 400,
+          fontSize: '21px',
+          letterSpacing: '1px'
         }}>
           <Film size={19} />
-          OFFSET
+          OFF FRAME
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -52,29 +52,8 @@ export default function Header({ currentModel, usdStatus, onLoadPreset }) {
         </div>
       </div>
 
-      {/* Preset Action Buttons & Status Indicators */}
+      {/* Status Indicators */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* Preset Loaders */}
-        <div style={{ display: 'flex', gap: '8px', marginRight: '6px' }}>
-          <button 
-            className="ph-btn ph-btn-sm" 
-            onClick={() => onLoadPreset('bedroom')}
-            title="Load standard 3-wall bedroom set preset"
-          >
-            <Box size={13} style={{ color: 'var(--accent-orange)' }} />
-            Bedroom (3-Wall)
-          </button>
-
-          <button 
-            className="ph-btn ph-btn-sm" 
-            onClick={() => onLoadPreset('corridor')}
-            title="Load 4-wall corridor set preset"
-          >
-            <Box size={13} style={{ color: 'var(--accent-blue)' }} />
-            Corridor (4-Wall)
-          </button>
-        </div>
-
         {/* Model Route Badge */}
         <div className="ph-badge ph-badge-orange" style={{ padding: '5px 12px' }}>
           <Cpu size={13} />

@@ -11,7 +11,7 @@ function getModelLabel(modelUsed) {
   if (modelUsed.includes('opus')) return 'Opus';
   if (modelUsed === 'error') return 'Error';
   if (modelUsed === 'preset') return 'Preset';
-  return 'Offset Agent';
+  return 'Off Frame Agent';
 }
 
 export default function LeftPanel({
@@ -181,7 +181,7 @@ export default function LeftPanel({
               alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start'
             }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                {msg.role === 'user' ? 'DIRECTOR' : 'OFFSET AGENT'}
+                {msg.role === 'user' ? 'DIRECTOR' : 'OFF FRAME AGENT'}
               </span>
               {msg.model_used && (
                 <span className="ph-badge ph-badge-orange" style={{ fontSize: '9px', padding: '1px 6px' }}>
