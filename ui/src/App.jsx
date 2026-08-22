@@ -3,13 +3,10 @@ import Header from './components/Header';
 import LeftPanel from './components/LeftPanel';
 import RenderView from './components/RenderView';
 import {
-  checkCoverage,
-  checkPhysics,
   downloadUsdFromPrompt,
-  generateUsd,
   getValidateSimulateStatus,
   listUsdCameras,
-  sendChatTurn,
+  proposeUsdFix,
   startValidateSimulate
 } from './api/offsetAgent';
 
@@ -20,29 +17,19 @@ export default function App() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Welcome to Off Frame! I am your pre-visualization set validation assistant for NVIDIA Omniverse. Describe your film set (e.g., "2 walls forming a corner, 4m wide, with a floor and 3m ceiling"), and I will help you refine and validate it.',
+      content: 'Welcome to Off Frame! I am your pre-visualization set validation assistant for NVIDIA Omniverse. Describe your film set (e.g., "cooking show kitchen set" or "podcast studio room"), and I will generate a downloadable USD file you can validate with a real Isaac Sim render.',
       model_used: 'offset-agent'
     }
   ]);
 
-  // Default scene state starts clean (no pre-extracted confirmation card)
-  const [sceneConfig, setSceneConfig] = useState(null);
-  const [currentScene, setCurrentScene] = useState(null);
   const [currentModel, setCurrentModel] = useState('offset-agent');
   const [isLoading, setIsLoading] = useState(false);
-  const [readyForConfirmation, setReadyForConfirmation] = useState(false);
-  const [readableSummary, setReadableSummary] = useState(null);
   const [usdStatus, setUsdStatus] = useState(null);
-  const [isGeneratingUSD, setIsGeneratingUSD] = useState(false);
   const [isDownloadingPromptUSD, setIsDownloadingPromptUSD] = useState(false);
-  const [checkResults, setCheckResults] = useState(null);
-  const [fixReport, setFixReport] = useState(null); // { summary, fixes, updated_scene_config, model_used } | null
+  const [fixReport, setFixReport] = useState(null); // { summary, fixes, fixed_usda_path, fixed_usda_content, model_used } | null
   const [fixReportSource, setFixReportSource] = useState(null); // 'validate_simulate' | null
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isApplyingFix, setIsApplyingFix] = useState(false);
-  // 'preview' mode's toggle button is commented out in LeftPanel.jsx (Three.js
-  // preview deprioritized) -- default straight to the usd_script_agent pipeline.
-  const [chatMode, setChatMode] = useState('usd-file');
 
   // Cameras actually present in the current USD file (parsed server-side via
   // pxr, not assumed from the in-memory scene -- some USDs have no camera at
@@ -79,96 +66,46 @@ export default function App() {
     return `${slug || 'agent_generated'}.usda`;
   };
 
-  // Send conversational turn to FastAPI backend (/api/chat)
+  // Every chat turn generates a downloadable USD file from the prompt via
+  // usd_script_agent (POST /chat-usd-file), and points Validate & Simulate /
+  // the camera picker at that same file (usdStatus?.usd_path).
   const handleSendMessage = async (text) => {
     const userMsg = { role: 'user', content: text };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setIsLoading(true);
+    setIsDownloadingPromptUSD(true);
 
     try {
-      if (chatMode === 'usd-file') {
-        const outputFilename = filenameFromPrompt(text);
-        setIsDownloadingPromptUSD(true);
-        const download = await downloadUsdFromPrompt({
-          prompt: text,
-          messages,
-          outputFilename
+      const outputFilename = filenameFromPrompt(text);
+      const download = await downloadUsdFromPrompt({
+        prompt: text,
+        messages,
+        outputFilename
+      });
+      downloadBlob(download.blob, outputFilename);
+
+      if (download.path) {
+        const usdContent = await download.blob.text();
+        setUsdStatus({
+          status: 'SUCCESS',
+          usd_path: download.path,
+          usd_content: usdContent,
+          prim_count: null,
+          message: `Generated via ${download.source}`,
         });
-        downloadBlob(download.blob, outputFilename);
-
-        // Point usdStatus at the file that was just downloaded (the
-        // usd_script_agent-produced one), not the /generate-usd scene
-        // pipeline's generated_set.usda -- this is what Validate & Simulate
-        // and the camera picker read (usdStatus?.usd_path), so this makes
-        // them operate on exactly the file the user just downloaded.
-        if (download.path) {
-          const usdContent = await download.blob.text();
-          setUsdStatus({
-            status: 'SUCCESS',
-            usd_path: download.path,
-            usd_content: usdContent,
-            prim_count: null,
-            message: `Generated via ${download.source}`,
-          });
-        }
-
-        const previewData = await sendChatTurn({
-          messages: updatedMessages,
-          currentConfig: sceneConfig,
-          currentScene
-        });
-
-        setCurrentModel(download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback');
-        setReadyForConfirmation(previewData.ready_for_confirmation);
-        if (previewData.scene_config) {
-          setSceneConfig(previewData.scene_config);
-        }
-        if (previewData.scene) {
-          setCurrentScene(previewData.scene);
-        }
-        if (previewData.readable_summary) {
-          setReadableSummary(previewData.readable_summary);
-        }
-
-        setMessages([
-          ...updatedMessages,
-          {
-            role: 'assistant',
-            content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes). I also updated the Three.js preview from the same prompt.`,
-            model_used: download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback'
-          }
-        ]);
-        return;
       }
 
-      const data = await sendChatTurn({
-        messages: updatedMessages,
-        currentConfig: sceneConfig,
-        currentScene
-      });
-
+      const modelUsed = download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback';
+      setCurrentModel(modelUsed);
       setMessages([
         ...updatedMessages,
         {
           role: 'assistant',
-          content: data.message,
-          model_used: data.model_used
+          content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes). Click **Validate & Simulate** in the viewport to render it through Isaac Sim.`,
+          model_used: modelUsed
         }
       ]);
-
-      setCurrentModel(data.model_used);
-      setReadyForConfirmation(data.ready_for_confirmation);
-
-      if (data.scene_config) {
-        setSceneConfig(data.scene_config);
-      }
-      if (data.scene) {
-        setCurrentScene(data.scene);
-      }
-      if (data.readable_summary) {
-        setReadableSummary(data.readable_summary);
-      }
     } catch (err) {
       console.error('Chat error:', err);
       setMessages([
@@ -185,84 +122,6 @@ export default function App() {
     }
   };
 
-  // POST /api/generate-usd
-  const handleConfirmGenerateUSD = async () => {
-    if (!sceneConfig && !currentScene) return;
-    setIsGeneratingUSD(true);
-
-    try {
-      const data = await generateUsd({
-        sceneConfig: sceneConfig || { walls: [], floor: { width: 8, depth: 6 }, shots: [] },
-        currentScene,
-        outputFilename: 'generated_set.usda'
-      });
-      setUsdStatus(data);
-
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `✅ **USD Stage Generated Successfully!**\nStage file saved to \`${data.usd_path}\` with ${data.prim_count} prims. Live 3D preview updated.`,
-          model_used: 'anthropic/claude-sonnet-4-6'
-        }
-      ]);
-    } catch (err) {
-      console.error('Generate USD error:', err);
-      alert('Failed to generate USD file.');
-    } finally {
-      setIsGeneratingUSD(false);
-    }
-  };
-
-  const handleDownloadPromptUSD = async (prompt) => {
-    if (!prompt.trim() || isDownloadingPromptUSD) return;
-    setIsDownloadingPromptUSD(true);
-
-    try {
-      const outputFilename = filenameFromPrompt(prompt);
-      const download = await downloadUsdFromPrompt({
-        prompt,
-        messages,
-        outputFilename
-      });
-      downloadBlob(download.blob, outputFilename);
-
-      // Same as the usd-file chat-mode branch above: make Validate & Simulate
-      // and the camera picker operate on this file instead of generated_set.usda.
-      if (download.path) {
-        const usdContent = await download.blob.text();
-        setUsdStatus({
-          status: 'SUCCESS',
-          usd_path: download.path,
-          usd_content: usdContent,
-          prim_count: null,
-          message: `Generated via ${download.source}`,
-        });
-      }
-
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `USD file generated via ${download.source} and downloaded as \`${outputFilename}\` (${download.sizeBytes.toLocaleString()} bytes).`,
-          model_used: download.source === 'llm-deepagent' ? 'usd-script-agent' : 'deterministic-fallback'
-        }
-      ]);
-    } catch (err) {
-      console.error('Download USD error:', err);
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `Sorry, I could not generate the USD download. ${err.message}`,
-          model_used: 'error'
-        }
-      ]);
-    } finally {
-      setIsDownloadingPromptUSD(false);
-    }
-  };
-
   // Downloads the USD stage that /api/generate-usd already produced (usd_content
   // is already in memory from that response) -- distinct from the prompt-driven
   // /chat-usd-file download flow, which re-generates from a prompt via a fresh
@@ -276,10 +135,8 @@ export default function App() {
 
   // Whenever the current USD stage changes, ask the backend which cameras
   // ACTUALLY exist in that file (POST /list-usd-cameras, plain pxr parsing --
-  // not a render, not Isaac Sim). Deliberately not derived from currentScene's
-  // in-memory cameras list: /validate-usd takes an arbitrary usda_path, which
-  // might not match 1:1 with the current chat scene, and some USD files have
-  // no camera at all, so the picker must reflect the real file.
+  // not a render, not Isaac Sim). Some USD files have no camera at all, so
+  // the picker must reflect the real file rather than assuming one exists.
   useEffect(() => {
     const usdaPath = usdStatus?.usd_path;
     if (!usdaPath) {
@@ -449,36 +306,24 @@ export default function App() {
       .catch((err) => console.error('Manual validate status check error:', err));
   };
 
-  // POST /api/propose-fix -> Sonnet fix-proposer agent (fix_agent.py) reasons over
-  // evidence (collision flags from a real Validate & Simulate run) and proposes
-  // fixes from a fixed set of types, plus a plain-language summary. This ONLY
-  // generates the report - it does not touch scene_config or trigger a
-  // re-validate. The director reviews it and decides whether to apply it
-  // (handleApplyFixReport below).
-  const handleGenerateFixReport = async (evidence, source = 'validate_simulate') => {
-    if (!sceneConfig || !evidence) return;
+  // POST /api/propose-usd-fix -> Sonnet fix-proposer agent (usd_fix_agent.py)
+  // reasons directly over the actual .usda text that was validated plus the
+  // real validation_result.json from Validate & Simulate, and returns a
+  // corrected .usda file (fixed_usda_path/fixed_usda_content) -- not a
+  // mutated scene_config, since usd_script_agent-produced files never have one.
+  // This ONLY generates the report; the director reviews it and decides
+  // whether to apply it (handleApplyFixReport below).
+  const handleGenerateFixReportFromValidateSimulate = async () => {
+    if (!validateResult || !usdStatus?.usd_path) return;
     setIsGeneratingReport(true);
     setFixReport(null);
-    setFixReportSource(source);
+    setFixReportSource('validate_simulate');
 
     try {
-      const fixRes = await fetch('/api/propose-fix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scene_config: sceneConfig,
-          coverage_flags: evidence.coverage_flags || [],
-          physics_flags: evidence.physics_flags || [],
-          collision_flags: evidence.collision_flags || [],
-        })
+      const fixData = await proposeUsdFix({
+        usdaPath: usdStatus.usd_path,
+        validationResult: validateResult.validation_result || {},
       });
-
-      if (!fixRes.ok) {
-        const errBody = await fixRes.json().catch(() => ({}));
-        throw new Error(errBody.detail || `Fix proposal failed with status ${fixRes.status}`);
-      }
-
-      const fixData = await fixRes.json();
       setFixReport(fixData);
     } catch (err) {
       console.error('Generate fix report error:', err);
@@ -491,20 +336,12 @@ export default function App() {
     }
   };
 
-  const handleGenerateFixReportFromValidateSimulate = () => {
-    if (!validateResult) return;
-    handleGenerateFixReport({
-      coverage_flags: [],
-      physics_flags: [],
-      collision_flags: validateResult.collision_flags || [],
-    }, 'validate_simulate');
-  };
-
-  // Applies a previously-generated fix report: mutates scene_config, regenerates
-  // USD, then re-runs Validate & Simulate to verify. Only runs when the
-  // director explicitly clicks Apply.
+  // Applies a previously-generated fix report: points usdStatus at the
+  // corrected .usda the fix agent already wrote to disk, then re-runs
+  // Validate & Simulate on it to verify. Only runs when the director
+  // explicitly clicks Apply.
   const handleApplyFixReport = async () => {
-    if (!fixReport) return;
+    if (!fixReport?.fixed_usda_path) return;
     setIsApplyingFix(true);
 
     const flagsBefore = {
@@ -513,31 +350,26 @@ export default function App() {
     const fixes = fixReport.fixes || [];
 
     try {
-      setSceneConfig(fixReport.updated_scene_config);
+      setUsdStatus({
+        status: 'SUCCESS',
+        usd_path: fixReport.fixed_usda_path,
+        usd_content: fixReport.fixed_usda_content,
+        prim_count: null,
+        message: 'Corrected via usd_fix_agent',
+      });
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          content: `🔧 **Applying ${fixes.length} fix(es):**\n${fixes.map(f => `- **${f.fix_type}** on \`${f.target_id}\`: ${f.rationale}`).join('\n')}\n\nRegenerating USD and re-validating to verify...`,
+          content: `🔧 **Applying ${fixes.length} fix(es):**\n${fixes.map(f => `- **${f.fix_type}** on \`${f.target_id}\`: ${f.rationale}`).join('\n')}\n\nRe-validating to verify...`,
           model_used: fixReport.model_used,
         }
       ]);
 
-      const usdRes = await fetch('/api/generate-usd', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scene_config: fixReport.updated_scene_config,
-          output_filename: 'generated_set.usda'
-        })
-      });
-      const usdData = await usdRes.json();
-      setUsdStatus(usdData);
-
-      // Kicks off a new async validate job; the before/after comparison
-      // message is posted from the polling loop's 'done' handler once this
-      // new run actually completes, since it no longer resolves synchronously.
-      await handleValidateAndSimulate(usdData.usd_path, flagsBefore.collisions);
+      // Kicks off a new async validate job against the corrected file; the
+      // before/after comparison message is posted from the polling loop's
+      // 'done' handler once this new run actually completes.
+      await handleValidateAndSimulate(fixReport.fixed_usda_path, flagsBefore.collisions);
 
       setFixReport(null);
       setFixReportSource(null);
@@ -557,27 +389,6 @@ export default function App() {
     setFixReportSource(null);
   };
 
-  // Verification Suite Callbacks
-  const handleCheckCoverage = async () => {
-    if (!sceneConfig) return;
-    try {
-      const data = await checkCoverage(sceneConfig);
-      setCheckResults(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleCheckPhysics = async () => {
-    if (!sceneConfig) return;
-    try {
-      const data = await checkPhysics(sceneConfig);
-      setCheckResults(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
     <div className="app-container">
       <Header
@@ -589,25 +400,11 @@ export default function App() {
         <LeftPanel
           messages={messages}
           onSendMessage={handleSendMessage}
-          chatMode={chatMode}
-          onChatModeChange={setChatMode}
           isLoading={isLoading}
-          sceneConfig={sceneConfig}
-          readableSummary={readableSummary}
-          readyForConfirmation={readyForConfirmation}
-          onConfirmGenerateUSD={handleConfirmGenerateUSD}
-          isGeneratingUSD={isGeneratingUSD}
           isDownloadingPromptUSD={isDownloadingPromptUSD}
-          usdStatus={usdStatus}
-          onDownloadPromptUSD={handleDownloadPromptUSD}
-          onCheckCoverage={handleCheckCoverage}
-          onCheckPhysics={handleCheckPhysics}
-          checkResults={checkResults}
         />
 
         <RenderView
-          sceneConfig={sceneConfig}
-          sceneSpec={currentScene}
           usdStatus={usdStatus}
           onDownloadUsd={handleDownloadGeneratedUsd}
           onGenerateFixReportFromValidateSimulate={handleGenerateFixReportFromValidateSimulate}

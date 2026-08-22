@@ -4,7 +4,8 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Any, NamedTuple
+import traceback
+from typing import NamedTuple
 
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -19,10 +20,46 @@ from modules.offset_agent.models import ChatMessage
 USD_SCRIPT_AGENT_PROMPT = """
 You are a senior OpenUSD blockout script author for a film set previsualization app.
 
+CRITICAL: the Python script you write runs in a bare sandbox with NO modules available at
+all -- not pxr, not Usd, not UsdGeom, nothing. You are NOT authoring USD through the real
+OpenUSD Python API (no `Usd.Stage.CreateNew(...)`, no `UsdGeom.Xform.Define(...)`, no
+`from pxr import ...` of any kind -- that will be rejected before it even runs). Instead you
+are hand-writing the raw ASCII USDA TEXT yourself, one line at a time, as plain Python
+strings, and either assigning the whole thing to a variable named USD_CONTENT or calling
+write_usda(the_text). This is the ONLY interface available. A minimal correct script looks
+exactly like this shape (adapt content, keep the mechanism identical):
+
+    parts = []
+    def add(line):
+        parts.append(line)
+    add("#usda 1.0")
+    add("(")
+    add('    defaultPrim = "World"')
+    add("    metersPerUnit = 1")
+    add('    upAxis = "Z"')
+    add(")")
+    add("")
+    add('def Xform "World"')
+    add("{")
+    add('    def Cube "Floor" (')
+    add('        prepend apiSchemas = ["PhysicsCollisionAPI"]')
+    add("    )")
+    add("    {")
+    add("        double size = 1")
+    add("        double3 xformOp:scale = (4, 4, 0.1)")
+    add("        double3 xformOp:translate = (0, 0, -0.05)")
+    add('        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]')
+    add("        color3f[] primvars:displayColor = [(0.5, 0.5, 0.5)]")
+    add("    }")
+    add("}")
+    USD_CONTENT = "\\n".join(parts) + "\\n"
+
 Your task:
-- Convert the user's scene request into a small Python script that emits a valid ASCII USDA stage.
+- Convert the user's scene request into a small Python script that emits a valid ASCII USDA stage
+  using ONLY plain string-building like the example above -- no OpenUSD API calls of any kind.
 - The script must either assign a string variable named USD_CONTENT or call write_usda(usd_text).
-- Do not use imports, open(), file paths, subprocesses, network, eval, exec, or external packages.
+- Do not use imports, open(), file paths, subprocesses, network, eval, exec, or external packages --
+  not even `pxr`. Every primitive is authored as literal USDA text via string concatenation/f-strings.
 - Keep the script deterministic and self-contained.
 - Use Z-up, meters, and simple USD primitives: Xform, Cube, Cylinder, Cone, Sphere, Camera, DistantLight, DomeLight.
 - Include a defaultPrim named World.
@@ -82,56 +119,95 @@ def generate_usd_file_from_prompt(
             script = _generate_script_with_deep_agent(prompt, messages)
             source = "llm-deepagent"
         except Exception:  # noqa: BLE001 - model/tool failures should fall back to deterministic USDA.
+            print(f"[usd_script_agent] LLM script generation failed for prompt {prompt!r}, falling back to deterministic template:")
+            traceback.print_exc()
             script = _fallback_usd_script(prompt)
     else:
         script = _fallback_usd_script(prompt)
 
     try:
         usd_content = _run_usd_script(script, prompt=prompt)
-    except Exception:
+    except Exception as first_error:
         if source != "llm-deepagent":
             raise
-        source = "deterministic-fallback"
-        script = _fallback_usd_script(prompt)
-        usd_content = _run_usd_script(script, prompt=prompt)
+        # One bounded repair attempt before giving up on the LLM path entirely --
+        # tells the model exactly what broke (usually: it reached for the real
+        # pxr/Usd API instead of hand-writing USDA text, which the sandbox
+        # rejects) and asks for a corrected script. Exactly one retry, not a
+        # loop, so this can't turn into the same runaway-round-trips problem
+        # the old deep-agent architecture had.
+        try:
+            print(f"[usd_script_agent] LLM script failed validation for prompt {prompt!r} ({first_error}); attempting one repair round-trip:")
+            script = _repair_script_with_llm(prompt, script, first_error)
+            usd_content = _run_usd_script(script, prompt=prompt)
+        except Exception:
+            print(f"[usd_script_agent] LLM repair attempt also failed for prompt {prompt!r}, falling back to deterministic template:")
+            traceback.print_exc()
+            source = "deterministic-fallback"
+            script = _fallback_usd_script(prompt)
+            usd_content = _run_usd_script(script, prompt=prompt)
     out_path = _write_usd_file(usd_content, output_filename)
     return USDGenerationResult(path=out_path, script=script, source=source)
 
 
 def _generate_script_with_deep_agent(prompt: str, messages: list[ChatMessage]) -> str:
-    captured: dict[str, str] = {}
-
-    @tool
-    def write_usd_python_script_tool(script: str) -> str:
-        """Save the Python script that produces USDA text."""
-        captured["script"] = script
-        return "Python USD script captured."
-
-    agent = _get_usd_script_agent(write_usd_python_script_tool)
-    conversation = [
-        {
-            "role": "user",
-            "content": message.content,
-        }
+    """
+    Despite the name (kept for the calling convention elsewhere in this file),
+    this is now a single direct tool-calling completion, NOT a `deepagents`
+    planning loop. `create_deep_agent` builds a full multi-step ReAct/planning
+    graph meant for open-ended agentic tasks; for "convert this prompt into
+    one Python script and call one tool with it", that architecture was
+    making 15-20+ sequential LLM round trips per request (each individually
+    fast, but the whole chain taking minutes and sometimes never terminating
+    within any request's realistic budget) -- which is why the LLM path
+    looked broken and every real prompt silently rode on the deterministic
+    fallback. Binding the tool directly and doing one .invoke() gets the same
+    single-tool-call outcome the prompt already asks for, in one LLM call.
+    """
+    conversation = [{"role": "system", "content": USD_SCRIPT_AGENT_PROMPT}]
+    conversation += [
+        {"role": "user", "content": message.content}
         for message in messages
         if message.role == "user"
     ]
     conversation.append({"role": "user", "content": prompt})
-    result = agent.invoke({"messages": conversation})
-    script = captured.get("script") or _extract_script_from_tool_calls(result)
-    if not script:
-        raise USDScriptError("USD script agent did not call the script tool.")
-    return script
+    return _call_script_tool(conversation, prompt)
 
 
-def _get_usd_script_agent(script_tool):
-    from deepagents import create_deep_agent
+def _repair_script_with_llm(prompt: str, broken_script: str, error: Exception) -> str:
+    """One bounded follow-up call: shows the model its own broken script plus
+    the exact error, and asks for a corrected one. Not a loop -- called at
+    most once per request, from generate_usd_file_from_prompt above."""
+    conversation = [
+        {"role": "system", "content": USD_SCRIPT_AGENT_PROMPT},
+        {"role": "user", "content": prompt},
+        {
+            "role": "user",
+            "content": (
+                f"Your previous script for this request failed with this error:\n{error}\n\n"
+                f"Previous script:\n```python\n{broken_script}\n```\n\n"
+                "Fix it and call the tool again with a corrected COMPLETE script. Remember: "
+                "no imports, no pxr/Usd API calls of any kind -- build the USDA text as plain "
+                "strings via add()/write_usda() exactly as instructed, matching the example shape."
+            ),
+        },
+    ]
+    return _call_script_tool(conversation, prompt)
 
+
+def _call_script_tool(conversation: list[dict], prompt: str) -> str:
     llm = ChatOpenAI(
         model=DEFAULT_MODEL,
         openai_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         openai_api_base=OPENROUTER_BASE_URL,
         temperature=0.1,
+        # Without an explicit cap, the client's default max output tokens is far
+        # too small for a several-hundred-line script -- the response was
+        # getting cut off mid-tool-call, arriving with an empty `args: {}`
+        # and finish_reason "error", which looked identical to "didn't call
+        # the tool". 16000 comfortably covers every script seen this session
+        # (largest content so far was ~45KB of USDA text, roughly 12k tokens).
+        max_tokens=16000,
         timeout=MODEL_TIMEOUT_SECONDS,
         max_retries=1,
         default_headers={
@@ -139,32 +215,29 @@ def _get_usd_script_agent(script_tool):
             "X-Title": "Offset USD Script Generator",
         },
     )
-    return create_deep_agent(
-        model=llm,
-        tools=[script_tool],
-        system_prompt=USD_SCRIPT_AGENT_PROMPT,
+
+    @tool
+    def write_usd_python_script_tool(script: str) -> str:
+        """Save the Python script that produces USDA text."""
+        return "Python USD script captured."
+
+    # tool_choice is required, not just offered -- without it, the model can
+    # (and for some prompts did) just reply in plain text instead of calling
+    # the tool, which we'd have no script to run and would look identical to
+    # a real failure. Forcing this specific tool removes that failure mode.
+    llm_with_tool = llm.bind_tools([write_usd_python_script_tool], tool_choice="write_usd_python_script_tool")
+    response = llm_with_tool.invoke(conversation)
+    for tool_call in response.tool_calls or []:
+        if tool_call.get("name") == "write_usd_python_script_tool":
+            script = tool_call.get("args", {}).get("script")
+            if isinstance(script, str) and script.strip():
+                return script
+    print(
+        f"[usd_script_agent] no usable tool call in response for prompt {prompt!r}. "
+        f"response.tool_calls={response.tool_calls!r} response.content={response.content!r} "
+        f"response_metadata={getattr(response, 'response_metadata', None)!r}"
     )
-
-
-def _extract_script_from_tool_calls(result: dict[str, Any]) -> str | None:
-    for message in reversed(result.get("messages", [])):
-        tool_calls = getattr(message, "tool_calls", None)
-        if tool_calls is None and isinstance(message, dict):
-            tool_calls = message.get("tool_calls")
-        for tool_call in tool_calls or []:
-            function_data = tool_call.get("function", {}) if isinstance(tool_call, dict) else {}
-            args = tool_call.get("args") if isinstance(tool_call, dict) else None
-            args = args or function_data.get("arguments")
-            if isinstance(args, str):
-                import json
-
-                try:
-                    args = json.loads(args)
-                except json.JSONDecodeError:
-                    continue
-            if isinstance(args, dict) and isinstance(args.get("script"), str):
-                return args["script"]
-    return None
+    raise USDScriptError("USD script agent did not call the script tool.")
 
 
 def _run_usd_script(script: str, prompt: str | None = None) -> str:
@@ -340,43 +413,83 @@ def _write_usd_file(content: str, output_filename: str) -> str:
 
 
 def _generic_room_usd_script() -> str:
-    return '''USD_CONTENT = """#usda 1.0
-(
-    defaultPrim = "World"
-    metersPerUnit = 1
-    upAxis = "Z"
-)
+    return '''parts = []
 
-def Xform "World"
-{
-    def Cube "Floor" (
-        prepend apiSchemas = ["PhysicsCollisionAPI"]
+def add(line):
+    parts.append(line)
+
+def vec_sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+def vec_cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
     )
-    {
-        double size = 1
-        double3 xformOp:scale = (6, 5, 0.08)
-        double3 xformOp:translate = (0, 0, -0.04)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-        color3f[] primvars:displayColor = [(0.45, 0.48, 0.5)]
-    }
-    def Cube "BackWall" (
-        prepend apiSchemas = ["PhysicsCollisionAPI"]
+
+def vec_normalize(v):
+    length = max((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) ** 0.5, 0.0001)
+    return (v[0] / length, v[1] / length, v[2] / length)
+
+def look_at_matrix(eye, target):
+    forward = vec_normalize(vec_sub(target, eye))
+    right = vec_normalize(vec_cross(forward, (0, 0, 1)))
+    up = vec_cross(right, forward)
+    return (
+        (right[0], right[1], right[2], 0),
+        (up[0], up[1], up[2], 0),
+        (-forward[0], -forward[1], -forward[2], 0),
+        (eye[0], eye[1], eye[2], 1),
     )
-    {
-        double size = 1
-        double3 xformOp:scale = (6, 0.16, 3)
-        double3 xformOp:translate = (0, 2.5, 1.5)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-        color3f[] primvars:displayColor = [(0.78, 0.74, 0.68)]
-    }
-    def Camera "Camera"
-    {
-        float focalLength = 35
-        double3 xformOp:translate = (0, -5, 2)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-    }
-}
-"""'''
+
+def matrix_literal(matrix):
+    rows = []
+    for row in matrix:
+        rows.append("(" + ", ".join([str(round(value, 6)) for value in row]) + ")")
+    return "(" + ", ".join(rows) + ")"
+
+def static_camera(name, focal_length, eye, target):
+    add('    def Camera "' + name + '"')
+    add("    {")
+    add("        float focalLength = " + str(focal_length))
+    add("        matrix4d xformOp:transform = " + matrix_literal(look_at_matrix(eye, target)))
+    add('        uniform token[] xformOpOrder = ["xformOp:transform"]')
+    add("    }")
+
+add("#usda 1.0")
+add("(")
+add('    defaultPrim = "World"')
+add("    metersPerUnit = 1")
+add('    upAxis = "Z"')
+add(")")
+add("")
+add('def Xform "World"')
+add("{")
+add('    def Cube "Floor" (')
+add('        prepend apiSchemas = ["PhysicsCollisionAPI"]')
+add("    )")
+add("    {")
+add("        double size = 1")
+add("        double3 xformOp:scale = (6, 5, 0.08)")
+add("        double3 xformOp:translate = (0, 0, -0.04)")
+add('        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]')
+add("        color3f[] primvars:displayColor = [(0.45, 0.48, 0.5)]")
+add("    }")
+add('    def Cube "BackWall" (')
+add('        prepend apiSchemas = ["PhysicsCollisionAPI"]')
+add("    )")
+add("    {")
+add("        double size = 1")
+add("        double3 xformOp:scale = (6, 0.16, 3)")
+add("        double3 xformOp:translate = (0, 2.5, 1.5)")
+add('        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]')
+add("        color3f[] primvars:displayColor = [(0.78, 0.74, 0.68)]")
+add("    }")
+static_camera("Camera", 35, (0, -5, 2), (0, 1.5, 1.2))
+add("}")
+USD_CONTENT = "\\n".join(parts) + "\\n"
+'''
 
 
 def _podcast_usd_script() -> str:
@@ -429,6 +542,45 @@ def person(prefix, x, y, shirt):
     cyl(prefix + "_Arm_L", 0.04, 0.45, (x - 0.22, y + 0.08, 0.98), shirt)
     cyl(prefix + "_Arm_R", 0.04, 0.45, (x + 0.22, y + 0.08, 0.98), shirt)
 
+def vec_sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+def vec_cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+def vec_normalize(v):
+    length = max((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) ** 0.5, 0.0001)
+    return (v[0] / length, v[1] / length, v[2] / length)
+
+def look_at_matrix(eye, target):
+    forward = vec_normalize(vec_sub(target, eye))
+    right = vec_normalize(vec_cross(forward, (0, 0, 1)))
+    up = vec_cross(right, forward)
+    return (
+        (right[0], right[1], right[2], 0),
+        (up[0], up[1], up[2], 0),
+        (-forward[0], -forward[1], -forward[2], 0),
+        (eye[0], eye[1], eye[2], 1),
+    )
+
+def matrix_literal(matrix):
+    rows = []
+    for row in matrix:
+        rows.append("(" + ", ".join([str(round(value, 6)) for value in row]) + ")")
+    return "(" + ", ".join(rows) + ")"
+
+def static_camera(name, focal_length, eye, target):
+    add('        def Camera "' + name + '"')
+    add("        {")
+    add("            float focalLength = " + str(focal_length))
+    add("            matrix4d xformOp:transform = " + matrix_literal(look_at_matrix(eye, target)))
+    add('            uniform token[] xformOpOrder = ["xformOp:transform"]')
+    add("        }")
+
 add('#usda 1.0')
 add('(')
 add('    defaultPrim = "World"')
@@ -474,12 +626,7 @@ add('        }')
 add('    }')
 add('    def Xform "Cameras"')
 add('    {')
-add('        def Camera "WideCamera"')
-add('        {')
-add('            float focalLength = 35')
-add('            double3 xformOp:translate = (0, -3.8, 1.55)')
-add('            uniform token[] xformOpOrder = ["xformOp:translate"]')
-add('        }')
+static_camera("WideCamera", 35, (0, -3.8, 1.55), (0, -0.3, 1.05))
 add('    }')
 add('}')
 USD_CONTENT = "\\n".join(parts) + "\\n"
@@ -734,6 +881,45 @@ def tree(name, x, y, scale):
     cyl(name + "_Trunk", 0.12 * scale, 2.0 * scale, (x, y, 1.0 * scale), (0.28, 0.17, 0.08))
     cone(name + "_Foliage", 0.8 * scale, 1.7 * scale, (x, y, 2.65 * scale), (0.16, 0.36, 0.13))
 
+def vec_sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+def vec_cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+def vec_normalize(v):
+    length = max((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) ** 0.5, 0.0001)
+    return (v[0] / length, v[1] / length, v[2] / length)
+
+def look_at_matrix(eye, target):
+    forward = vec_normalize(vec_sub(target, eye))
+    right = vec_normalize(vec_cross(forward, (0, 0, 1)))
+    up = vec_cross(right, forward)
+    return (
+        (right[0], right[1], right[2], 0),
+        (up[0], up[1], up[2], 0),
+        (-forward[0], -forward[1], -forward[2], 0),
+        (eye[0], eye[1], eye[2], 1),
+    )
+
+def matrix_literal(matrix):
+    rows = []
+    for row in matrix:
+        rows.append("(" + ", ".join([str(round(value, 6)) for value in row]) + ")")
+    return "(" + ", ".join(rows) + ")"
+
+def static_camera(name, focal_length, eye, target):
+    add('        def Camera "' + name + '"')
+    add("        {")
+    add("            float focalLength = " + str(focal_length))
+    add("            matrix4d xformOp:transform = " + matrix_literal(look_at_matrix(eye, target)))
+    add('            uniform token[] xformOpOrder = ["xformOp:transform"]')
+    add("        }")
+
 add("#usda 1.0")
 add("(")
 add('    defaultPrim = "World"')
@@ -793,18 +979,8 @@ add("        }")
 add("    }")
 add('    def Xform "Cameras"')
 add("    {")
-add('        def Camera "WideCam"')
-add("        {")
-add("            float focalLength = 18")
-add("            double3 xformOp:translate = (0, -14, 5.2)")
-add('            uniform token[] xformOpOrder = ["xformOp:translate"]')
-add("        }")
-add('        def Camera "HeroFollowCam"')
-add("        {")
-add("            float focalLength = 35")
-add("            double3 xformOp:translate = (-5, -5.5, 1.7)")
-add('            uniform token[] xformOpOrder = ["xformOp:translate"]')
-add("        }")
+static_camera("WideCam", 18, (0, -14, 5.2), (0, 2, 2))
+static_camera("HeroFollowCam", 35, (-5, -5.5, 1.7), (0, -2.0, 1.2))
 add("    }")
 add("}")
 USD_CONTENT = "\\n".join(parts) + "\\n"

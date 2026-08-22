@@ -24,7 +24,7 @@ from modules.offset_agent.scene_ops import (
 from modules.offset_agent.tools import OFFSET_AGENT_TOOLS
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "anthropic/claude-sonnet-4-6"
+DEFAULT_MODEL = "anthropic/claude-sonnet-5"
 FALLBACK_MODEL = "local/deterministic-scene-agent"
 MODEL_TIMEOUT_SECONDS = 35
 

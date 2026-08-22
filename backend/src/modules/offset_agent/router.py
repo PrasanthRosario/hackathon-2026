@@ -21,7 +21,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import FileResponse
 
-from modules.offset_agent import fix_agent
+from modules.offset_agent import fix_agent, usd_fix_agent
 from modules.offset_agent.deep_agent import run_offset_agent
 from modules.offset_agent.models import (
     ChatRequest,
@@ -38,13 +38,15 @@ from modules.offset_agent.models import (
     SceneConfigSchema,
     USDScriptChatRequest,
     UsdCameraInfo,
+    UsdFixRequest,
+    UsdFixResponse,
     ValidateUSDJobResponse,
     ValidateUSDRequest,
     ValidateUSDResponse,
     ValidateUSDStatusResponse,
 )
 from modules.offset_agent.usd_exporter import generate_usd_from_config, generate_usd_from_scene
-from modules.offset_agent.usd_script_agent import generate_usd_file_from_prompt
+from modules.offset_agent.usd_script_agent import USDScriptError, generate_usd_file_from_prompt
 
 router = APIRouter(tags=["Offset Pre-Viz Agent"])
 JsonBody = Annotated[dict[str, Any], Body(...)]
@@ -810,4 +812,41 @@ def propose_fix(request: ProposeFixRequest):
         fixes=fixes,
         updated_scene_config=updated_config,
         model_used="anthropic/claude-sonnet-4-6",
+    )
+
+
+@router.post("/propose-usd-fix", response_model=UsdFixResponse)
+def propose_usd_fix_endpoint(request: UsdFixRequest):
+    """
+    Fix-proposer for the usd_script_agent pipeline: reasons directly over the
+    actual .usda text that was validated plus the real validation_result.json
+    from /validate-usd, and returns a corrected .usda file on disk (not a
+    mutated scene_config -- see /propose-fix above for that older, separate
+    flow). The caller re-submits fixed_usda_path to /validate-usd to verify.
+    """
+    if not os.path.isfile(request.usda_path):
+        raise HTTPException(status_code=404, detail=f"usda_path not found: {request.usda_path}")
+
+    with open(request.usda_path, "r") as f:
+        usda_content = f.read()
+
+    try:
+        result = usd_fix_agent.propose_usd_fix(
+            usda_content=usda_content,
+            validation_result=request.validation_result,
+            output_filename=request.output_filename,
+        )
+    except USDScriptError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:  # noqa: BLE001 - API boundary maps model/provider failures.
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"USD fix proposal failed: {e!s}")
+
+    return UsdFixResponse(
+        status="SUCCESS",
+        summary=result.summary,
+        fixes=result.fixes,
+        fixed_usda_path=result.fixed_path,
+        fixed_usda_content=result.fixed_content,
+        model_used=result.source,
     )

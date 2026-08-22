@@ -110,3 +110,14 @@ export function startValidateSimulate({ usdaPath, sceneId, camera, frames, fps, 
 export function getValidateSimulateStatus(sceneId) {
   return getJson(`/validate-usd/${sceneId}/status`);
 }
+
+// POST /propose-usd-fix -> reasons directly over the actual .usda text that was
+// validated plus the real validation_result.json, and returns a corrected
+// .usda file on disk (fixed_usda_path) rather than a mutated scene_config.
+export function proposeUsdFix({ usdaPath, validationResult, outputFilename }) {
+  return postJson('/propose-usd-fix', {
+    usda_path: usdaPath,
+    validation_result: validationResult,
+    ...(outputFilename !== undefined ? { output_filename: outputFilename } : {}),
+  });
+}

@@ -77,7 +77,21 @@ start() {
 
 stop() {
   if is_running; then
-    kill "$(cat "$PID_FILE")"
+    pid="$(cat "$PID_FILE")"
+    # start() launches this PID via setsid, making it its own process group
+    # leader (PGID == PID) -- `uv run` then execs/forks uvicorn as a CHILD,
+    # so a plain `kill $pid` only ever signals the `uv run` wrapper and
+    # leaves the actual uvicorn server (and its worker threads) orphaned but
+    # still bound to the port. Signaling the whole group (negative PID) kills
+    # uv run AND uvicorn together, which is what "stopped" actually needs to mean.
+    kill -TERM -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null
+    for _ in 1 2 3 4 5; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 1
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL -- "-$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null
+    fi
     rm -f "$PID_FILE"
     echo "Backend stopped."
   else

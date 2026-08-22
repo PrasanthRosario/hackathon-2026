@@ -190,6 +190,27 @@ class ProposeFixResponse(BaseModel):
     model_used: str
 
 
+class UsdFixRequest(BaseModel):
+    """
+    Fix-proposer for the usd_script_agent pipeline: operates directly on an
+    existing .usda file's text plus a real validation_result.json, rather than
+    the SceneSpecSchema-based ProposeFixRequest above (which requires a
+    scene_config usd_script_agent-produced files never have).
+    """
+    usda_path: str = Field(..., description="Absolute path to the .usda file that was actually validated")
+    validation_result: dict[str, Any] = Field(..., description="The validation_result payload from /validate-usd's status response: {status, violations, camera_collisions}")
+    output_filename: str = Field("fixed_set.usda", description="Filename for the corrected stage, written under scenes/")
+
+
+class UsdFixResponse(BaseModel):
+    status: str
+    summary: str | None = Field(None, description="Director-friendly paragraph explaining the issues and the fix.")
+    fixes: list[dict[str, Any]] = Field(default_factory=list)
+    fixed_usda_path: str | None = Field(None, description="Absolute path to the corrected .usda file on this machine")
+    fixed_usda_content: str | None = Field(None, description="Full text of the corrected stage, so the caller can display/download it without a second read")
+    model_used: str | None = None
+
+
 class UsdCameraInfo(BaseModel):
     path: str = Field(..., description="Full USD prim path, e.g. '/World/Cameras/WideCam'")
     name: str = Field(..., description="Prim name only, e.g. 'WideCam'")

@@ -1,14 +1,8 @@
-import React, { useState } from 'react';
-// Three.js live preview is deprioritized in favor of the usd_script_agent +
-// Validate & Simulate (Isaac Sim) pipeline -- commented out, not deleted, in
-// case it's needed again.
-// import ThreeCanvas from './ThreeCanvas';
+import React from 'react';
 import ValidateSimulateResultView from './ValidateSimulateResultView';
-import { Layers, Loader2, ShieldCheck, Download } from 'lucide-react';
+import { Loader2, ShieldCheck, Download, FileBox } from 'lucide-react';
 
 export default function RenderView({
-  sceneConfig,
-  sceneSpec,
   usdStatus,
   onDownloadUsd,
   onGenerateFixReportFromValidateSimulate,
@@ -30,13 +24,10 @@ export default function RenderView({
   isLoadingCameras,
   cameraListError,
 }) {
-  const [renderMode, setRenderMode] = useState('validate_result');
   const isValidating = validateStatus === 'queued' || validateStatus === 'running';
-  const propCount = sceneSpec?.objects?.filter(
-    obj => !['floor', 'wall', 'ceiling'].includes(obj.kind)
-  ).length || 0;
 
   const hasUsd = !!usdStatus?.usd_path;
+  const usdFilename = usdStatus?.usd_path?.split('/').pop();
   const noCamerasInUsd = hasUsd && !isLoadingCameras && (usdCameras || []).length === 0;
   const validateDisabledReason = !hasUsd
     ? 'Generate a USD stage first'
@@ -67,36 +58,24 @@ export default function RenderView({
         justifyContent: 'space-between',
         zIndex: 5
       }}>
-        {/* Render Mode Switcher Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginRight: '6px' }}>
-            VIEWPORT SEAM:
+            VIEWPORT:
           </span>
-
-          {/* Three.js Live Preview tab -- commented out, see import above */}
-          {/* <button
-            className={`ph-btn ph-btn-sm ${renderMode === 'threejs' ? 'ph-btn-primary' : ''}`}
-            onClick={() => setRenderMode('threejs')}
-          >
-            <Box size={13} />
-            Three.js Live Preview
-          </button> */}
-
-          <button
-            className={`ph-btn ph-btn-sm ${renderMode === 'validate_result' ? 'ph-btn-primary' : ''}`}
-            onClick={() => setRenderMode('validate_result')}
-          >
+          <span className="ph-btn ph-btn-sm ph-btn-primary" style={{ pointerEvents: 'none' }}>
             <ShieldCheck size={13} />
             Validate & Simulate Result
-          </button>
+          </span>
         </div>
 
         {/* Viewport Meta Details */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="ph-badge ph-badge-grey">
-            <Layers size={11} />
-            Walls: {sceneConfig?.walls?.length || 0} | Props: {propCount} | Shots: {sceneConfig?.shots?.length || 0}
-          </span>
+          {hasUsd && (
+            <span className="ph-badge ph-badge-grey" title={usdStatus?.usd_path}>
+              <FileBox size={11} />
+              {usdFilename} · {(usdCameras || []).length} camera{(usdCameras || []).length === 1 ? '' : 's'}
+            </span>
+          )}
 
           <button
             className="ph-btn ph-btn-sm"
@@ -128,10 +107,7 @@ export default function RenderView({
 
           <button
             className="ph-btn ph-btn-sm ph-btn-yellow"
-            onClick={() => {
-              setRenderMode('validate_result');
-              onValidateAndSimulate();
-            }}
+            onClick={onValidateAndSimulate}
             disabled={!hasUsd || isValidating || isLoadingCameras || noCamerasInUsd}
             title={validateDisabledReason}
           >
@@ -143,25 +119,19 @@ export default function RenderView({
 
       {/* Main Render Area */}
       <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-        {/* {renderMode === 'threejs' && (
-          <ThreeCanvas sceneConfig={sceneConfig} sceneSpec={sceneSpec} />
-        )} */}
-
-        {renderMode === 'validate_result' && (
-          <ValidateSimulateResultView
-            status={validateStatus}
-            job={validateJob}
-            result={validateResult}
-            error={validateError}
-            onCheckStatusNow={onCheckValidateStatusNow}
-            onGenerateFixReport={onGenerateFixReportFromValidateSimulate}
-            isGeneratingReport={isGeneratingReport}
-            fixReport={fixReportSource === 'validate_simulate' ? fixReport : null}
-            onApplyFixReport={onApplyFixReport}
-            isApplyingFix={isApplyingFix}
-            onDismissFixReport={onDismissFixReport}
-          />
-        )}
+        <ValidateSimulateResultView
+          status={validateStatus}
+          job={validateJob}
+          result={validateResult}
+          error={validateError}
+          onCheckStatusNow={onCheckValidateStatusNow}
+          onGenerateFixReport={onGenerateFixReportFromValidateSimulate}
+          isGeneratingReport={isGeneratingReport}
+          fixReport={fixReportSource === 'validate_simulate' ? fixReport : null}
+          onApplyFixReport={onApplyFixReport}
+          isApplyingFix={isApplyingFix}
+          onDismissFixReport={onDismissFixReport}
+        />
       </div>
     </div>
   );

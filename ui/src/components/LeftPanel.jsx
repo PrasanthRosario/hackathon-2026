@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, CheckCircle2, Cpu, Sparkles, Box, ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { Download, Cpu } from 'lucide-react';
 
 function getModelLabel(modelUsed) {
   if (!modelUsed) return null;
@@ -10,35 +10,21 @@ function getModelLabel(modelUsed) {
   if (modelUsed.includes('sonnet')) return 'Sonnet';
   if (modelUsed.includes('opus')) return 'Opus';
   if (modelUsed === 'error') return 'Error';
-  if (modelUsed === 'preset') return 'Preset';
   return 'Off Frame Agent';
 }
 
 export default function LeftPanel({
   messages,
   onSendMessage,
-  chatMode,
-  onChatModeChange,
   isLoading,
-  sceneConfig,
-  readableSummary,
-  readyForConfirmation,
-  onConfirmGenerateUSD,
-  isGeneratingUSD,
   isDownloadingPromptUSD,
-  onDownloadPromptUSD,
-  usdStatus,
-  onCheckCoverage,
-  onCheckPhysics,
-  checkResults
 }) {
   const [inputText, setInputText] = useState('');
-  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const chatBottomRef = useRef(null);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, readyForConfirmation]);
+  }, [messages]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -50,11 +36,6 @@ export default function LeftPanel({
   const handleQuickPrompt = (prompt) => {
     if (isLoading) return;
     onSendMessage(prompt);
-  };
-
-  const handleDownloadPromptUSD = () => {
-    if (!inputText.trim() || isLoading || isDownloadingPromptUSD) return;
-    onDownloadPromptUSD(inputText.trim());
   };
 
   return (
@@ -94,63 +75,13 @@ export default function LeftPanel({
               Set Assistant
             </h2>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-              Scene operation chat flow
+              Describe a set -- generates a downloadable USD file
             </p>
           </div>
         </div>
 
         <div className="ph-badge ph-badge-grey">
           <span>FASTAPI BACKEND</span>
-        </div>
-      </div>
-
-      <div style={{
-        padding: '10px 20px',
-        backgroundColor: 'var(--bg-surface)',
-        borderBottom: '1px solid var(--border-light)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px'
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '10.5px',
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px'
-        }}>
-          Chat API
-        </span>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          gap: '4px',
-          padding: '4px',
-          backgroundColor: '#0F172A',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: '8px',
-          width: '125px'
-        }}>
-          {/* Preview mode toggle -- commented out, chat is USD File-only for now */}
-          {/* <button
-            type="button"
-            className={`ph-btn ph-btn-sm ${chatMode === 'preview' ? 'ph-btn-primary' : ''}`}
-            style={{ padding: '5px 8px', fontSize: '11.5px' }}
-            onClick={() => onChatModeChange('preview')}
-          >
-            <Box size={13} />
-            Preview
-          </button> */}
-          <button
-            type="button"
-            className={`ph-btn ph-btn-sm ${chatMode === 'usd-file' ? 'ph-btn-yellow' : ''}`}
-            style={{ padding: '5px 8px', fontSize: '11.5px' }}
-            onClick={() => onChatModeChange('usd-file')}
-          >
-            <Download size={13} />
-            USD File
-          </button>
         </div>
       </div>
 
@@ -224,121 +155,8 @@ export default function LeftPanel({
               color: 'var(--text-muted)'
             }}>
               <Cpu size={14} className="animate-spin" style={{ color: 'var(--accent-orange)' }} />
-              <span>{chatMode === 'usd-file' ? 'Generating downloadable USD...' : 'Sending scene request to backend...'}</span>
+              <span>{isDownloadingPromptUSD ? 'Generating downloadable USD...' : 'Sending request to backend...'}</span>
             </div>
-          </div>
-        )}
-
-        {/* READABLE SCENE SUMMARY CARD (Shown ONLY when scene extraction completes) */}
-        {readyForConfirmation && sceneConfig && (
-          <div className="ph-card" style={{
-            padding: '18px',
-            backgroundColor: '#131B2A',
-            marginTop: '8px',
-            border: '1px solid var(--border-accent)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={19} style={{ color: 'var(--accent-orange)' }} />
-                <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '15px', fontWeight: 700, color: '#FFF' }}>
-                  Extracted Set Configuration
-                </h3>
-              </div>
-              <span className="ph-badge ph-badge-yellow">CONFIRMATION READY</span>
-            </div>
-
-            {/* Formatted Readable Parameters Summary */}
-            <div style={{
-              backgroundColor: '#0F172A',
-              padding: '14px',
-              borderRadius: '8px',
-              border: '1px solid var(--border-subtle)',
-              fontSize: '12.5px',
-              fontFamily: 'var(--font-mono)',
-              marginBottom: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#38BDF8' }}>
-                <Box size={14} />
-                <span>Floor Space: <strong>{sceneConfig.floor?.width}m (Width) × {sceneConfig.floor?.depth}m (Depth)</strong></span>
-              </div>
-
-              {sceneConfig.walls && sceneConfig.walls.length > 0 && (
-                <div>
-                  <strong style={{ color: '#F1A80A' }}>🧱 Walls ({sceneConfig.walls.length}):</strong>
-                  <ul style={{ paddingLeft: '18px', marginTop: '4px', color: '#E2E8F0', lineHeight: '1.7' }}>
-                    {sceneConfig.walls.map((w, i) => (
-                      <li key={i}>
-                        <code>{w.id}</code>: {w.width}m wide × {w.height}m high at [{w.position.join(', ')}] ({w.rotation}°)
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {sceneConfig.shots && sceneConfig.shots.length > 0 && (
-                <div>
-                  <strong style={{ color: '#FF7A38' }}>🎥 Shots ({sceneConfig.shots.length}):</strong>
-                  <ul style={{ paddingLeft: '18px', marginTop: '4px', color: '#E2E8F0', lineHeight: '1.7' }}>
-                    {sceneConfig.shots.map((s, i) => (
-                      <li key={i}>
-                        <code>{s.shot_id}</code>: Lens {s.focal_length_mm}mm | Dolly [{s.start_position.join(', ')}] ➔ [{s.end_position.join(', ')}] ({s.duration_seconds}s)
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* Confirm & Generate USD Action Button */}
-            <button
-              className="ph-btn ph-btn-primary"
-              style={{ width: '100%', padding: '11px 18px', fontSize: '14px' }}
-              onClick={onConfirmGenerateUSD}
-              disabled={isGeneratingUSD}
-            >
-              <Sparkles size={16} />
-              {isGeneratingUSD ? 'Generating USD Stage...' : 'Confirm & Generate USD Stage'}
-            </button>
-
-            {/* Optional Collapsible Advanced Validation Suite */}
-            <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px dashed var(--border-subtle)' }}>
-              <button
-                className="ph-btn ph-btn-sm"
-                onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-                style={{ width: '100%', justifyContent: 'space-between', color: 'var(--text-muted)' }}
-              >
-                <span>Advanced Validation Suite</span>
-                {showAdvancedTools ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-
-              {showAdvancedTools && (
-                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <button className="ph-btn ph-btn-sm" onClick={onCheckCoverage}>
-                      Frustum Coverage
-                    </button>
-                    <button className="ph-btn ph-btn-sm" onClick={onCheckPhysics}>
-                      Physics Clearance
-                    </button>
-                  </div>
-                  <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', margin: 0 }}>
-                    Fast heuristic checks only. For a real render + PhysX collision validation
-                    and fix verification, use "Validate & Simulate" in the viewport panel →
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Validation Results Display */}
-        {checkResults && (
-          <div className="ph-card" style={{ padding: '12px', backgroundColor: '#0F172A', color: '#7DD3FC', fontSize: '11.5px', fontFamily: 'var(--font-mono)' }}>
-            <strong>Validation Output:</strong>
-            <pre style={{ marginTop: '6px', whiteSpace: 'pre-wrap' }}>{JSON.stringify(checkResults, null, 2)}</pre>
           </div>
         )}
 
@@ -361,16 +179,23 @@ export default function LeftPanel({
         <button
           className="ph-btn ph-btn-sm"
           style={{ whiteSpace: 'nowrap', fontSize: '11.5px', padding: '3px 10px' }}
-          onClick={() => handleQuickPrompt('2 walls forming a corner, 4m wide back wall, 3m side wall, floor and 3m ceiling, table and chair inside.')}
+          onClick={() => handleQuickPrompt('Create a cooking show kitchen set')}
         >
-          2-Wall Corner Set
+          Cooking Show Kitchen
         </button>
         <button
           className="ph-btn ph-btn-sm"
           style={{ whiteSpace: 'nowrap', fontSize: '11.5px', padding: '3px 10px' }}
-          onClick={() => handleQuickPrompt('Bedroom set with 3 walls, 4m back wall, 3m side walls, dolly track left to right.')}
+          onClick={() => handleQuickPrompt('Create a podcast studio room with two chairs and microphones')}
         >
-          Bedroom 3-Wall
+          Podcast Studio
+        </button>
+        <button
+          className="ph-btn ph-btn-sm"
+          style={{ whiteSpace: 'nowrap', fontSize: '11.5px', padding: '3px 10px' }}
+          onClick={() => handleQuickPrompt('Create a church set with a crowd outside')}
+        >
+          Church Exterior
         </button>
       </div>
 
@@ -386,9 +211,7 @@ export default function LeftPanel({
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder={chatMode === 'usd-file'
-            ? 'Describe USD scene to generate and download...'
-            : 'Describe set (e.g. 2 walls, floor and ceiling, table and chair)...'}
+          placeholder="Describe USD scene to generate and download..."
           disabled={isLoading}
           style={{
             flex: 1,
@@ -408,23 +231,8 @@ export default function LeftPanel({
           className="ph-btn ph-btn-primary"
           style={{ padding: '0 18px' }}
         >
-          {chatMode === 'usd-file' ? <Download size={16} /> : <Send size={16} />}
+          <Download size={16} />
         </button>
-        {chatMode === 'preview' && (
-          <button
-            type="button"
-            disabled={isLoading || isDownloadingPromptUSD || !inputText.trim()}
-            className="ph-btn ph-btn-yellow"
-            style={{ padding: '0 14px' }}
-            onClick={handleDownloadPromptUSD}
-            title="Generate and download USD from prompt"
-          >
-            <Download size={16} />
-            <span style={{ fontSize: '11.5px' }}>
-              {isDownloadingPromptUSD ? 'USD...' : 'USD'}
-            </span>
-          </button>
-        )}
       </form>
     </div>
   );
